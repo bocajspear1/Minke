@@ -46,6 +46,8 @@ class SampleThread (threading.Thread):
                 file_list = os.listdir(os.path.join(job_dir, "files"))
                 to_exec = file_list[0]
 
+            print(to_exec)
+
             die_cont.start(os.path.join(job_dir, "files"), {
                 "EXECSAMPLE": to_exec
             })
@@ -147,12 +149,12 @@ def sumbit_sample():
 
     if multiple:
         execname = secure_filename(request.form['exec'])
-        set_config(sample_dir, {
+        set_config(job_dir, {
             "start-exec": execname
         })
     else:
         execname = secure_filename(file_list[0].filename)
-        set_config(sample_dir, {
+        set_config(job_dir, {
             "start-exec": execname
         })
 

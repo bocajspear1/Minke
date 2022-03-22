@@ -30,20 +30,24 @@ class DetectItEasy(BaseContainer):
 
         if "detects" in die_data:
             detect = die_data['detects'][0]
-            output["filetype"] = detect["filetype"].lower()
-            for item in detect['values']:
-                if item['type'] == "Compiler":
-                    output["compiler"] = item['version']
-                    info_data = item["info"]
-                    info_split = info_data.split(" ", 1)
-                    if info_split[0] == "EXEC":
-                        output["form"] = "executable"
-                    elif info_split[0] == "DYN":
-                        output["form"] = "library"
-                    
-                    arch_split = info_split[1].split('-')
-                    output['arch'] = arch_split[0].lower()
-                    output['bits'] = arch_split[1].lower()
+            if "filetype" in detect:
+                output["filetype"] = detect["filetype"].lower()
+
+            if "values" in detect:
+
+                for item in detect['values']:
+                    if item['type'] == "Compiler":
+                        output["compiler"] = item['version']
+                        info_data = item["info"]
+                        info_split = info_data.split(" ", 1)
+                        if info_split[0] == "EXEC":
+                            output["form"] = "executable"
+                        elif info_split[0] == "DYN":
+                            output["form"] = "library"
+                        
+                        arch_split = info_split[1].split('-')
+                        output['arch'] = arch_split[0].lower()
+                        output['bits'] = arch_split[1].lower()
 
 
         hash_output = open(os.path.join(job_dir, "hashes"))

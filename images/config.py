@@ -14,11 +14,13 @@ def get_config(job_dir):
 
 def set_config(job_dir, data):
     old_config = get_config(job_dir)
+    if old_config is None:
+        old_config = {}
     for item in data:
         old_config['item'] = data[item]
 
     config_path = os.path.join(job_dir, "config.json")
 
     config_file = open(config_path, "w+")
-    json.dump(old_config)
+    config_file.write(json.dumps(old_config))
     config_file.close()

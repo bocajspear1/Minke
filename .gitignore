@@ -1,2 +1,6 @@
 .flask_key
 venv/
+samples/
+__pycache__/
+*.pem
+*.log

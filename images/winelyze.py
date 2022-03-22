@@ -4,6 +4,7 @@ import os
 import threading
 import random
 import string
+import subprocess
 
 class WinelyzeContainer(BaseContainer):
 
@@ -11,7 +12,9 @@ class WinelyzeContainer(BaseContainer):
         super().__init__('winelyze', name, network=True)
 
     def process(self, job_dir):
+
         pass
+        
 
 
 class WineylzeThread (threading.Thread):
@@ -40,5 +43,18 @@ class WineylzeThread (threading.Thread):
         })
 
         container.wait_and_stop()
+
+        self.extract(f'/tmp/{log_file}', self._job_dir)
+        self.extract(f'/tmp/{screenshot}', self._job_dir)
+
+        screenshot_raws = os.listdir(f"{self._job_dir}/{screenshot}")
+        for item in screenshot_raws:
+            new_name = item.replace("xscr", "png")
+            subprocess.check_output(["/usr/bin/convert", f"xwd:{self._job_dir}/{screenshot}/{item}", f"{self._job_dir}/{screenshot}/{new_name}"])
+            os.remove(f"{self._job_dir}/{screenshot}/{item}")
+
+
+
+        
 
         
