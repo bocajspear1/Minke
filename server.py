@@ -14,7 +14,7 @@ import queue
 import time
 import stat
 
-from images.detectiteasy import DetectItEasy
+from images.detect import DetectContainer
 from images.config import get_config, set_config
 
 from flask import Flask, g, jsonify, current_app, request, render_template, send_from_directory
@@ -37,7 +37,7 @@ class SampleThread (threading.Thread):
             uuid = self._queue.get(block=True)
             print(uuid)
             job_dir = os.path.join(SAMPLE_DIR, uuid)
-            die_cont = DetectItEasy('die-' + uuid)
+            die_cont = DetectContainer('die-' + uuid)
             to_exec = None
             config_data = get_config(job_dir)
             if config_data is not None and 'start-exec' in config_data:

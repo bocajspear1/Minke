@@ -2,16 +2,18 @@ from images.base import BaseContainer
 import json 
 import os
 
-class DetectItEasy(BaseContainer):
+class DetectContainer(BaseContainer):
 
     def __init__(self, name):
-        super().__init__('detect-it-easy', name)
+        super().__init__('detect', name)
 
     def process(self, job_dir):
-        self.extract("/tmp/output.json", job_dir)
+        self.extract("/tmp/die-out.json", job_dir)
+        self.extract("/tmp/objdump-out.txt", job_dir)
+        self.extract("/tmp/file-out.txt", job_dir)
         self.extract("/tmp/hashes", job_dir)
 
-        die_output = open(os.path.join(job_dir, "output.json"))
+        die_output = open(os.path.join(job_dir, "die-out.json"))
         die_data = json.load(die_output)
         die_output.close()
 

@@ -1,7 +1,7 @@
 FROM ubuntu:20.04
 
 RUN apt-get -qq update \
-&& DEBIAN_FRONTEND="noninteractive" apt-get -q install -y wget
+&& DEBIAN_FRONTEND="noninteractive" apt-get -q install -y wget binutils
 
 WORKDIR /opt
 RUN wget https://github.com/horsicq/DIE-engine/releases/download/3.04/die_3.04_Ubuntu_20.04_amd64.deb
