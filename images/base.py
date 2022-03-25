@@ -19,6 +19,7 @@ class BaseContainer():
         self._client = docker.from_env()
         self._created = False
         self._logger = logging.getLogger(f'{self._name}-logger')
+        self.vars = {}
 
         try:
             container = self._client.containers.get(self._name)
@@ -28,12 +29,20 @@ class BaseContainer():
         except docker.errors.APIError:
             pass 
 
+    def __del__(self):
+        try:
+            container = self._client.containers.get(self._name)
+            container.remove()
+        except docker.errors.NotFound:
+            pass
+        except docker.errors.APIError:
+            pass 
 
     def start(self, share_dir, env_vars=None):
 
         share_dir = os.path.abspath(share_dir)
 
-        environment = []
+        environment = {}
 
         if env_vars is not None:
             environment = env_vars
@@ -45,6 +54,8 @@ class BaseContainer():
         }
 
         environment['TMPDIR'] = tmp_dir
+
+        self.vars = environment
 
         if self._network:
             i = 0
