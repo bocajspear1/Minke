@@ -17,7 +17,7 @@ def set_config(job_dir, data):
     if old_config is None:
         old_config = {}
     for item in data:
-        old_config['item'] = data[item]
+        old_config[item] = data[item]
 
     config_path = os.path.join(job_dir, "config.json")
 

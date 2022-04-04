@@ -30,13 +30,12 @@ chmod 777 /tmp/quiet.reg
 sudo --user ${NAME} /bin/bash -c "DISPLAY=:0.0 wine regedit /tmp/quiet.reg"
 rm /tmp/quiet.reg
 
-cp /tmp/${DIR}/${SAM} /tmp/${SAM}
-chmod 777 /tmp/${SAM}
+chmod 777 ${DIR}/${SAM}
 
 echo "Running screenshot script"
 
 sudo --user ${NAME} /bin/bash -c "nohup /usr/bin/screenshot.sh ${SCR} &"
-sudo --user ${NAME} /bin/bash -c "cp /tmp/${SAM} /home/${NAME}/.wine/drive_c/users/${NAME}/${SAM}"
+sudo --user ${NAME} /bin/bash -c "cp ${DIR}/${SAM} /home/${NAME}/.wine/drive_c/users/${NAME}/${SAM}"
 chown -R ${NAME}:${NAME} /home/${NAME}
 
 echo "Starting sample"

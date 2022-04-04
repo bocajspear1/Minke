@@ -11,32 +11,63 @@ import json
 
 class BaseContainer():
 
-    def __init__(self, image_name, name, network=False):
+    def __init__(self, image_name, name, network=False, logger=None):
         self._name = name 
         self._image = image_name
         self._ports4u_name = 'ports4u-' + self._name
         self._network = network
         self._client = docker.from_env()
         self._created = False
-        self._logger = logging.getLogger(f'{self._name}-logger')
+        self._switch = None
+        if logger is None:
+            self._logger = logging.getLogger(f'{self._name}-logger')
+        else:
+            self._logger = logger
         self.vars = {}
 
-        try:
-            container = self._client.containers.get(self._name)
-            container.remove()
-        except docker.errors.NotFound:
-            pass
-        except docker.errors.APIError:
-            pass 
+        if not self._is_debug():
+            try:
+                container = self._client.containers.get(self._name)
+                container.remove()
+            except docker.errors.NotFound:
+                pass
+            except docker.errors.APIError:
+                pass 
+
+            try:
+                container = self._client.containers.get(self._ports4u_name)
+                container.remove()
+            except docker.errors.NotFound:
+                pass
+            except docker.errors.APIError:
+                pass 
 
     def __del__(self):
         try:
             container = self._client.containers.get(self._name)
-            container.remove()
+            container.stop()
+            if not self._is_debug():
+                container.remove()
         except docker.errors.NotFound:
             pass
         except docker.errors.APIError:
             pass 
+
+        try:
+            container = self._client.containers.get(self._ports4u_name)
+            container.stop()
+            if not self._is_debug():
+                container.remove()
+        except docker.errors.NotFound:
+            pass
+        except docker.errors.APIError:
+            pass 
+
+        if self._switch is not None:
+            subprocess.check_output(["/usr/bin/sudo", "/usr/bin/ovs-vsctl", "del-br", self._switch])
+
+    def _is_debug(self):
+        return os.getenv("MINKE_DEBUG") is not None
 
     def start(self, share_dir, env_vars=None):
 
@@ -64,17 +95,17 @@ class BaseContainer():
                 # Create private switch for analysis
                 try:
                     self._switch = f"vmbr{i}"
-                    subprocess.check_output(["/usr/bin/sudo", "/usr/bin/ovs-vsctl", "add-br", self._switch], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+                    subprocess.check_output(["/usr/bin/sudo", "/usr/bin/ovs-vsctl", "add-br", self._switch])
                     ok = True 
-                    self._logger.info("Create switch %s", self._switch)
+                    self._logger.info("Created switch %s", self._switch)
                 except:
                     i += 1
 
-                # Create ports4u container
-                p_container = self._client.containers.create('ports4u', detach=True, name=self._ports4u_name, network_mode="none", cap_add=["NET_ADMIN", "NET_RAW"])
-                p_container.start()
+            # Create ports4u container
+            p_container = self._client.containers.create('ports4u', detach=True, name=self._ports4u_name, network_mode="none", cap_add=["NET_ADMIN", "NET_RAW"])
+            p_container.start()
 
-                subprocess.check_output(["/usr/bin/sudo", "/usr/bin/ovs-docker", "add-port", self._switch, "eth0", self._ports4u_name, "--ipaddress={}".format('172.16.3.1/24')])
+            subprocess.check_output(["/usr/bin/sudo", "/usr/bin/ovs-docker", "add-port", self._switch, "eth0", self._ports4u_name, "--ipaddress={}".format('172.16.3.1/24')])
 
         container = None
         if self._network:
@@ -127,5 +158,19 @@ class BaseContainer():
 
         os.remove("/tmp/extract-data.tar")
 
-    def process(self):
+    def process_network(self, job_dir):
+        if self._network:
+            tar_file = "/tmp/extract-network.tar"
+            container = self._client.containers.get(self._ports4u_name)
+            strm, stat = container.get_archive("/opt/ports4u/logs")
+            results = open(tar_file, "wb")
+            for chunk in strm:
+                results.write(chunk)
+            results.close()
+
+            results_tar = tarfile.open(tar_file, "r")
+            results_tar.extractall(path=os.path.join(job_dir, "network"))
+            results_tar.close()
+
+    def process(self, job_dir):
         raise NotImplementedError

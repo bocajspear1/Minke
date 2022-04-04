@@ -5,3 +5,5 @@ __pycache__/
 *.pem
 *.log
 test/builder/out
+test/metasploit/out
+*.zip

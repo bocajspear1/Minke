@@ -13,8 +13,12 @@ import threading
 import queue
 import time
 import stat
+import random
+import string
 
 from images.detect import DetectContainer
+from images.winelyze import WinelyzeContainer
+from images.extract import ExtractContainer
 from images.config import get_config, set_config
 
 from flask import Flask, g, jsonify, current_app, request, render_template, send_from_directory
@@ -27,9 +31,10 @@ from flask.logging import default_handler
 SAMPLE_DIR= "./samples/"
 
 class SampleThread (threading.Thread):
-    def __init__(self, queue):
+    def __init__(self, id, queue):
         threading.Thread.__init__(self)
         self._queue = queue 
+        self._id = id
         self.daemon = True
 
     def run(self):
@@ -37,24 +42,77 @@ class SampleThread (threading.Thread):
             uuid = self._queue.get(block=True)
             print(uuid)
             job_dir = os.path.join(SAMPLE_DIR, uuid)
-            die_cont = DetectContainer('die-' + uuid)
-            to_exec = None
-            config_data = get_config(job_dir)
-            if config_data is not None and 'start-exec' in config_data:
-                to_exec = config_data['start-exec']
-            else:
-                file_list = os.listdir(os.path.join(job_dir, "files"))
-                to_exec = file_list[0]
+            file_dir = os.path.join(job_dir, "files")
 
-            print(to_exec)
+            config = get_config(job_dir)
+            execname = config['start-exec'] 
+
+            sample_files = os.listdir(file_dir)
+
+            for file_item in sample_files:
+                if file_item.endswith(".zip"):
+                    app.logger.info("Detected compressed file %s, extracting...", file_item)
+                    extract_cont = ExtractContainer("extract-" + uuid)
+                    extract_cont.start(os.path.join(job_dir, "files"), {
+                        "EXECSAMPLE": execname
+                    })
+                    time.sleep(3)
+                    extract_cont.process(job_dir)
+
+            if execname.endswith(".zip"):
+                new_sample_files = os.listdir(file_dir)
+                new_sample_files.remove(execname)
+
+                if len(new_sample_files) > 1:
+                    app.logger.error("Multiple files, but no execname set. Cannot continue")
+                    continue
+                elif len(new_sample_files) == 0:
+                    app.logger.error("Failed to extract files. Cannot continue")
+                    continue
+                else:
+                    execname = new_sample_files[0]
+
+
+            die_cont = DetectContainer('die-' + uuid)
+           
+
+            print(execname)
 
             die_cont.start(os.path.join(job_dir, "files"), {
-                "EXECSAMPLE": to_exec
+                "EXECSAMPLE": execname
             })
 
             time.sleep(2)
 
             die_data = die_cont.process(job_dir)
+
+            
+
+            container = None
+
+            if die_data['format'] == 'pe':
+                container = WinelyzeContainer(f"winelyze-{uuid}", logger=app.logger)
+
+                app.logger.info("Using Winelyze container")
+                username = ''.join(random.choice(string.ascii_lowercase) for i in range(5))
+                screenshot = ''.join(random.choice(string.ascii_lowercase) for i in range(6))
+                log_file = ''.join(random.choice(string.ascii_lowercase) for i in range(8))
+                app.logger.debug("exec: %s, user: %s", execname, username)
+
+                container.start(os.path.join(job_dir, "files"), {
+                    "SAMPLENAME": execname,
+                    "USER": username,
+                    "SCREENSHOT": screenshot,
+                    "LOG": log_file
+                })
+
+            if container is not None:
+                container.wait_and_stop()
+                container.process(job_dir)
+                container.process_network(job_dir)
+            else:
+                app.logger.info("No analysis container found")
+
             time.sleep(.5)
 
 def create_app():
@@ -64,11 +122,20 @@ def create_app():
     with app.app_context():
 
         app._queue = queue.Queue()
-        app._sample_thread = SampleThread(app._queue)
+        
+        THREAD_COUNT = 4
+        app._sample_threads = []
+        for i in range(THREAD_COUNT):
+            app._sample_threads.append(SampleThread(i, app._queue))
 
-        app.logger.setLevel(logging.INFO)
+        if os.getenv("MINKE_DEBUG") is not None:
+            app.logger.setLevel(logging.DEBUG)
+            app.logger.debug("Debugging is on!")
+        else:
+            app.logger.setLevel(logging.INFO)
 
-        app._sample_thread.start()
+        for i in range(THREAD_COUNT):
+            app._sample_threads[i].start()
         
         app.logger.info("Server %s started", VERSION)
 
