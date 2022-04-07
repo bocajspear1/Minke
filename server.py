@@ -74,7 +74,6 @@ class SampleThread (threading.Thread):
 
 
             die_cont = DetectContainer('die-' + uuid)
-           
 
             print(execname)
 
@@ -82,7 +81,7 @@ class SampleThread (threading.Thread):
                 "EXECSAMPLE": execname
             })
 
-            time.sleep(2)
+            time.sleep(4)
 
             die_data = die_cont.process(job_dir)
 
@@ -110,6 +109,7 @@ class SampleThread (threading.Thread):
                 container.wait_and_stop()
                 container.process(job_dir)
                 container.process_network(job_dir)
+                app.logger.info("Analysis %s completed", uuid)
             else:
                 app.logger.info("No analysis container found")
 

@@ -3,10 +3,12 @@ from images.config import get_config, set_config
 import os
 import threading
 import random
-import string
+import stat
 import subprocess
 from csv import reader
 import json
+
+GENERIC_WRITE = 0x40000000
 
 class WinelyzeContainer(BaseContainer):
 
@@ -26,7 +28,7 @@ class WinelyzeContainer(BaseContainer):
 
         return "", 0
 
-    def _process_tid_calls(self, call_list):
+    def _process_tid_calls(self, job_dir, call_list):
         i = 0
 
         calls = []
@@ -46,6 +48,8 @@ class WinelyzeContainer(BaseContainer):
                 data_split = data.split("(")
                 api_name = data_split[0].lower()
 
+                
+
                 # Process the arguments
                 arg_split = data_split[1].split(")")
                 args = []
@@ -59,6 +63,25 @@ class WinelyzeContainer(BaseContainer):
                     if "L\"" in item:
                         item_split = item.split("L\"")
                         args[j] = "\"" + item_split[1]
+
+                if api_name in ("kernel32.createfilew", "kernel32.createfilea", "kernel32.createfiletransacteda", "kernel32.createfiletransacteda"):
+                    access_mask = int(args[1], 16)
+                    if GENERIC_WRITE & access_mask != 0:
+                        winpath = args[0][1:-1]
+                        self._logger.info("Found written file %s", winpath)
+                        name = self.vars['USER']
+                        drive_split = winpath.split(":")
+                        convert_path = winpath
+                        if len(drive_split) > 1:
+                            convert_path = drive_split[1]
+                        convert_path = convert_path.replace("\\", "/").replace("//", "/")
+                        extract_path = f"/home/{name}/.wine/drive_c/{convert_path}"
+                        self._logger.info("Converted to path %s", extract_path)
+                        if not os.path.exists(f"{job_dir}/extracted"):
+                            os.mkdir(f"{job_dir}/extracted")
+                        filename = os.path.basename(extract_path)
+                        self.extract(extract_path, f"{job_dir}/extracted")
+                        os.chmod(f"{job_dir}/extracted/{filename}", stat.S_IREAD | stat.S_IRGRP | stat.S_IROTH)
 
                 # Do ret processing
                 ret_id = data.split("ret=")[1]
@@ -85,9 +108,9 @@ class WinelyzeContainer(BaseContainer):
                     calls.append({
                         "api": api_name,
                         "args": args,
-                        "ret": retval,
+                        "ret": int(ret_id, 16),
                         "call":  data.strip() + " " + retval,
-                        "subcalls": self._process_tid_calls(raw_subcalls)
+                        "subcalls": self._process_tid_calls(job_dir, raw_subcalls)
                     })
                 else:
                     calls.append({
@@ -178,7 +201,7 @@ class WinelyzeContainer(BaseContainer):
         self._logger.info("Processing Wine syscalls...")
         for pid in pid_list:
             for tid in pid_list[pid]:
-                processed = self._process_tid_calls(pid_list[pid][tid])
+                processed = self._process_tid_calls(job_dir, pid_list[pid][tid])
                 pid_list[pid][tid] = processed
 
         output_file = open(os.path.join(job_dir, "syscalls.json"), "w+")

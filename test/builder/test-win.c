@@ -12,8 +12,8 @@ int main() {
     printf("Hello there from i386\n");       
 #endif 
 
-    system("C:\\Windows\\system32\\notepad.exe");
 
+    printf("Running popen\n"); 
     f = popen("dir c:\\", "r");
 
     if (f == NULL) {
@@ -26,6 +26,26 @@ int main() {
     }
 
     pclose(f);
+    printf("Finishing popen\n");
+
+    printf("Writing file\n");
+
+    f = fopen("C:\\test.txt", "w+");
+
+    if (f == NULL) {
+        printf("File open failed failed\n");
+        return 1;
+    }
+
+    fputs("Put in file data\n", f);
+    fputs("Put in more file data\n", f);
+
+    fclose(f);
+
+    printf("Finished writing file\n");
+
+
+    system("C:\\Windows\\system32\\notepad.exe");
     
 
     return 0;
