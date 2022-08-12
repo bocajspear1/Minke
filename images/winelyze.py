@@ -32,6 +32,8 @@ class WinelyzeContainer(BaseContainer):
         i = 0
 
         calls = []
+        loaded_libs = []
+        proc_name = "UNKNOWN"
 
         while i < len(call_list):
             line = call_list[i]
@@ -110,7 +112,7 @@ class WinelyzeContainer(BaseContainer):
                         "args": args,
                         "ret": int(ret_id, 16),
                         "call":  data.strip() + " " + retval,
-                        "subcalls": self._process_tid_calls(job_dir, raw_subcalls)
+                        "subcalls": self._process_tid_calls(job_dir, raw_subcalls)[2]
                     })
                 else:
                     calls.append({
@@ -122,10 +124,18 @@ class WinelyzeContainer(BaseContainer):
                         "subcalls": []
                     })
                     i = i_start+1
-
+            elif "trace:loaddll:build_module" in oper:
+                if "Loaded" in data:
+                    load_split = data.split(" ")
+                    loaded_item = load_split[1][2:-1]
+                    if ".exe" in loaded_item:
+                        loaded_item_split = loaded_item.split("\\")
+                        proc_name = loaded_item_split[len(loaded_item_split)-1]
+                    elif ".dll" in loaded_item:
+                        loaded_libs.append(loaded_item)
             i+=1
 
-        return calls
+        return proc_name, loaded_libs, calls
 
 
     def process(self, job_dir):
@@ -181,13 +191,12 @@ class WinelyzeContainer(BaseContainer):
 
             line_split = line.split(":", 2)
 
-            if len(line_split) != 3:
+            if len(line_split) < 3:
                 continue
             
             pid = int(line_split[0], 16)
             tid = int(line_split[1], 16)
             syscall_data = line_split[2].split(" ", 1)
-
             
 
             if pid not in pid_list:
@@ -199,13 +208,30 @@ class WinelyzeContainer(BaseContainer):
             pid_list[pid][tid].append(syscall_data)
 
         self._logger.info("Processing Wine syscalls...")
+        new_pid_list = {}
         for pid in pid_list:
             for tid in pid_list[pid]:
-                processed = self._process_tid_calls(job_dir, pid_list[pid][tid])
-                pid_list[pid][tid] = processed
+                proc_name, loaded_libs, syscalls = self._process_tid_calls(job_dir, pid_list[pid][tid])
+
+                if pid not in new_pid_list:
+                    new_pid_list[pid] = {
+                        "name": proc_name,
+                        "libraries": [],
+                        "threads": {}
+                    }
+
+                if proc_name != "UNKNOWN":
+                    new_pid_list[pid]['name'] = proc_name
+                new_pid_list[pid]['libraries'] += loaded_libs
+                new_pid_list[pid]['threads'][tid] = syscalls
+
+        out_data = {
+            "operating_system": "windows",
+            "processes": new_pid_list
+        }
 
         output_file = open(os.path.join(job_dir, "syscalls.json"), "w+")
-        json.dump(pid_list, output_file, indent="    ")
+        json.dump(out_data, output_file, indent="    ")
         output_file.close()
 
         return True
