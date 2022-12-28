@@ -1,21 +1,24 @@
-from images.base import BaseContainer
+from minke.containers.base import BaseContainer
 import json 
 import os
 import shutil
+
+from minke.lib.job import MinkeJob
 
 class ExtractContainer(BaseContainer):
 
     def __init__(self, name):
         super().__init__('extract', name)
 
-    def process(self, job_dir):
-        newfiles = os.path.join(job_dir, "newfiles")
-        filesdir = os.path.join(job_dir, "files")
+    def process(self, job_obj : MinkeJob):
+        newfiles = os.path.join(job_obj.base_dir, "newfiles")
         self.extract("/tmp/out", newfiles)
 
         for item in os.listdir(os.path.join(newfiles, "out")):
             print(item)
-            shutil.move(os.path.join(newfiles, "out", item), os.path.join(filesdir, item))
+            new_path = job_obj.add_file(item)
+            shutil.move(os.path.join(newfiles, "out", item), new_path)
+            job_obj.setup_file(item)
 
         shutil.rmtree(newfiles)
 

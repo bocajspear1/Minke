@@ -1,5 +1,6 @@
-from images.base import BaseContainer
-from images.config import get_config, set_config
+from minke.containers.base import BaseContainer
+from minke.lib.job import MinkeJob
+
 import os
 import threading
 import random
@@ -28,7 +29,7 @@ class WinelyzeContainer(BaseContainer):
 
         return "", 0
 
-    def _process_tid_calls(self, job_dir, call_list):
+    def _process_tid_calls(self, job_obj : MinkeJob, call_list):
         i = 0
 
         calls = []
@@ -79,11 +80,13 @@ class WinelyzeContainer(BaseContainer):
                         convert_path = convert_path.replace("\\", "/").replace("//", "/")
                         extract_path = f"/home/{name}/.wine/drive_c/{convert_path}"
                         self._logger.info("Converted to path %s", extract_path)
-                        if not os.path.exists(f"{job_dir}/extracted"):
-                            os.mkdir(f"{job_dir}/extracted")
+                        if not os.path.exists(f"{job_obj.base_dir}/extracted"):
+                            os.mkdir(f"{job_obj.base_dir}/extracted")
                         filename = os.path.basename(extract_path)
-                        self.extract(extract_path, f"{job_dir}/extracted")
-                        os.chmod(f"{job_dir}/extracted/{filename}", stat.S_IREAD | stat.S_IRGRP | stat.S_IROTH)
+                        self.extract(extract_path, f"{job_obj.base_dir}/extracted")
+                        os.chmod(f"{job_obj.base_dir}/extracted/{filename}", stat.S_IREAD | stat.S_IRGRP | stat.S_IROTH)
+                        job_obj.add_info('written_files', filename)
+                        job_obj.save()
 
                 # Do ret processing
                 ret_id = data.split("ret=")[1]
@@ -112,7 +115,7 @@ class WinelyzeContainer(BaseContainer):
                         "args": args,
                         "ret": int(ret_id, 16),
                         "call":  data.strip() + " " + retval,
-                        "subcalls": self._process_tid_calls(job_dir, raw_subcalls)[2]
+                        "subcalls": self._process_tid_calls(job_obj, raw_subcalls)[2]
                     })
                 else:
                     calls.append({
@@ -138,24 +141,24 @@ class WinelyzeContainer(BaseContainer):
         return proc_name, loaded_libs, calls
 
 
-    def process(self, job_dir):
+    def process(self, job_obj : MinkeJob):
 
         username = self.vars['USER']
         execsample = self.vars['SAMPLENAME']
         screenshot_dir = self.vars['SCREENSHOT']
         log_file = self.vars['LOG']
 
-        self.extract(f'/tmp/{log_file}', job_dir)
-        self.extract(f'/tmp/{screenshot_dir}', job_dir)
+        self.extract(f'/tmp/{log_file}', job_obj.base_dir)
+        self.extract(f'/tmp/{screenshot_dir}', job_obj.base_dir)
 
-        screenshot_raws = os.listdir(f"{job_dir}/{screenshot_dir}")
+        screenshot_raws = os.listdir(f"{job_obj.base_dir}/{screenshot_dir}")
         for item in screenshot_raws:
             new_name = item.replace("xscr", "png")
-            subprocess.check_output(["/usr/bin/convert", f"xwd:{job_dir}/{screenshot_dir}/{item}", f"{job_dir}/{screenshot_dir}/{new_name}"])
-            os.remove(f"{job_dir}/{screenshot_dir}/{item}")
+            subprocess.check_output(["/usr/bin/convert", f"xwd:{job_obj.base_dir}/{screenshot_dir}/{item}", f"{job_obj.base_dir}/{screenshot_dir}/{new_name}"])
+            os.remove(f"{job_obj.base_dir}/{screenshot_dir}/{item}")
         
         self._logger.info("Processing Wine dump...")
-        dump_file = open(os.path.join(job_dir, log_file))
+        dump_file = open(os.path.join(job_obj.base_dir, log_file))
         dump_data = dump_file.read()
         dump_file.close()
 
@@ -211,7 +214,7 @@ class WinelyzeContainer(BaseContainer):
         new_pid_list = {}
         for pid in pid_list:
             for tid in pid_list[pid]:
-                proc_name, loaded_libs, syscalls = self._process_tid_calls(job_dir, pid_list[pid][tid])
+                proc_name, loaded_libs, syscalls = self._process_tid_calls(job_obj, pid_list[pid][tid])
 
                 if pid not in new_pid_list:
                     new_pid_list[pid] = {
@@ -230,7 +233,7 @@ class WinelyzeContainer(BaseContainer):
             "processes": new_pid_list
         }
 
-        output_file = open(os.path.join(job_dir, "syscalls.json"), "w+")
+        output_file = open(os.path.join(job_obj.base_dir, "syscalls.json"), "w+")
         json.dump(out_data, output_file, indent="    ")
         output_file.close()
 

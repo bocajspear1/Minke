@@ -16,19 +16,19 @@ import stat
 import random
 import string
 
-from images.detect import DetectContainer
-from images.winelyze import WinelyzeContainer
-from images.extract import ExtractContainer
-from images.config import get_config, set_config
+from minke.containers.winelyze import WinelyzeContainer
+from minke.containers.extract import ExtractContainer
+from minke.lib.job import MinkeJob
 
 from flask import Flask, g, jsonify, current_app, request, render_template, send_from_directory
 from werkzeug.utils import secure_filename
 
-VERSION = '0.0.1'
+VERSION = '0.0.2'
 
 from flask.logging import default_handler
 
 SAMPLE_DIR= "./samples/"
+START_EXEC_KEY = 'start-exec'
 
 class SampleThread (threading.Thread):
     def __init__(self, id, queue):
@@ -39,28 +39,31 @@ class SampleThread (threading.Thread):
 
     def run(self):
         while True:
-            uuid = self._queue.get(block=True)
-            print(uuid)
-            job_dir = os.path.join(SAMPLE_DIR, uuid)
-            file_dir = os.path.join(job_dir, "files")
+            job_obj : MinkeJob = self._queue.get(block=True)
+            print(job_obj.uuid)
+            # job_dir = os.path.join(SAMPLE_DIR, uuid)
+            # file_dir = os.path.join(job_dir, "files")
 
-            config = get_config(job_dir)
-            execname = config['start-exec'] 
+            
+            execname = job_obj.get_config_value(START_EXEC_KEY)
+            if execname is None:
+                print("Got job with not exec-start")
+                continue
 
-            sample_files = os.listdir(file_dir)
+            sample_files = job_obj.list_files()
 
             for file_item in sample_files:
-                if file_item.endswith(".zip"):
+                if job_obj.get_file_type(file_item) in ('application/zip',):
                     app.logger.info("Detected compressed file %s, extracting...", file_item)
-                    extract_cont = ExtractContainer("extract-" + uuid)
-                    extract_cont.start(os.path.join(job_dir, "files"), {
+                    extract_cont = ExtractContainer("extract-" + job_obj.uuid)
+                    extract_cont.start(job_obj.files_dir, {
                         "EXECSAMPLE": execname
                     })
                     time.sleep(3)
-                    extract_cont.process(job_dir)
-
+                    extract_cont.process(job_obj)
+                
             if execname.endswith(".zip"):
-                new_sample_files = os.listdir(file_dir)
+                new_sample_files = job_obj.list_files()
                 new_sample_files.remove(execname)
 
                 if len(new_sample_files) > 1:
@@ -73,24 +76,16 @@ class SampleThread (threading.Thread):
                     execname = new_sample_files[0]
 
 
-            die_cont = DetectContainer('die-' + uuid)
-
-            print(execname)
-
-            die_cont.start(os.path.join(job_dir, "files"), {
-                "EXECSAMPLE": execname
-            })
-
-            time.sleep(4)
-
-            die_data = die_cont.process(job_dir)
+            exec_type = job_obj.get_file_type(execname)
 
             
 
             container = None
+            container_name = ""
 
-            if die_data['format'] == 'pe':
-                container = WinelyzeContainer(f"winelyze-{uuid}", logger=app.logger)
+            if exec_type in ('application/x-dosexec',) :
+                container_name = f"winelyze-{job_obj.uuid}"
+                container = WinelyzeContainer(container_name, logger=app.logger)
 
                 app.logger.info("Using Winelyze container")
                 username = ''.join(random.choice(string.ascii_lowercase) for i in range(5))
@@ -98,7 +93,7 @@ class SampleThread (threading.Thread):
                 log_file = ''.join(random.choice(string.ascii_lowercase) for i in range(8))
                 app.logger.debug("exec: %s, user: %s", execname, username)
 
-                container.start(os.path.join(job_dir, "files"), {
+                container.start(job_obj.files_dir, {
                     "SAMPLENAME": execname,
                     "USER": username,
                     "SCREENSHOT": screenshot,
@@ -106,10 +101,16 @@ class SampleThread (threading.Thread):
                 })
 
             if container is not None:
-                container.wait_and_stop()
-                container.process(job_dir)
-                container.process_network(job_dir)
-                app.logger.info("Analysis %s completed", uuid)
+                main_logs, network_logs = container.wait_and_stop()
+                if main_logs.strip() != "":
+                    job_obj.write_log(f"{container_name}.log", main_logs)
+                if network_logs.strip() != "":
+                    job_obj.write_log(f"ports4u-container.log", network_logs)
+                container.process(job_obj)
+                container.process_network(job_obj)
+                app.logger.info("Analysis %s completed", job_obj.uuid)
+                job_obj.set_info('complete', True)
+                job_obj.save()
             else:
                 app.logger.info("No analysis container found")
 
@@ -193,8 +194,6 @@ def sumbit_sample():
             })
         file_list = [single_sample]
 
-    new_uuid = uuid.uuid4()
-
     if multiple and 'exec' not in request.form:
         return jsonify({
             "ok": False,
@@ -202,42 +201,29 @@ def sumbit_sample():
         })
     
 
-
-    
-
-    if not os.path.exists(SAMPLE_DIR):
-        os.mkdir(SAMPLE_DIR)
-
-    job_dir = os.path.join(SAMPLE_DIR, str(new_uuid))
-    os.mkdir(job_dir)
-
-    sample_dir = os.path.join(job_dir, "files")
-    os.mkdir(sample_dir)
+    new_job = MinkeJob.new(SAMPLE_DIR)
 
     if multiple:
         execname = secure_filename(request.form['exec'])
-        set_config(job_dir, {
-            "start-exec": execname
-        })
+        new_job.set_config_value(START_EXEC_KEY, execname)
     else:
         execname = secure_filename(file_list[0].filename)
-        set_config(job_dir, {
-            "start-exec": execname
-        })
+        new_job.set_config_value(START_EXEC_KEY, execname)
 
     for file in file_list:
         filename = secure_filename(file.filename)
-        file_path = os.path.join(sample_dir, filename)
-        file.save(file_path)
-        os.chmod(file_path, stat.S_IREAD | stat.S_IRGRP | stat.S_IROTH)
+        new_path = new_job.add_file(filename)
+        file.save(new_path)
+        new_job.setup_file(filename)
 
+    new_job.save()
 
-    app._queue.put(str(new_uuid))
+    app._queue.put(new_job)
 
     return jsonify({
         "ok": True,
         "result": {
-            "job_id": str(new_uuid)
+            "job_id": new_job.uuid
         }
     })
 

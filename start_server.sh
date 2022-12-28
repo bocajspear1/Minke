@@ -10,5 +10,4 @@ if [ ! -f key.pem ]; then
 fi
 
 export FLASK_KEY=`cat .flask_key`
-# ./venv/bin/gunicorn fnserver:app --bind 127.0.0.1:5050 --access-logfile ./logs/fakernet-access.log
-./venv/bin/gunicorn server:app --certfile=cert.pem --keyfile=key.pem --bind 0.0.0.0:5051 --access-logfile ./server.log
+./venv/bin/gunicorn minke.server:app --certfile=cert.pem --keyfile=key.pem --bind 0.0.0.0:5051 --access-logfile ./server.log

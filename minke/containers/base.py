@@ -102,10 +102,15 @@ class BaseContainer():
                     i += 1
 
             # Create ports4u container
-            p_container = self._client.containers.create('ports4u', detach=True, name=self._ports4u_name, network_mode="none", cap_add=["NET_ADMIN", "NET_RAW"])
+            p_env = {
+                "SLEEP_BEFORE": 5
+            }
+            p_container = self._client.containers.create('ports4u', environment=p_env, detach=True, name=self._ports4u_name, network_mode="none", cap_add=["NET_ADMIN", "NET_RAW"])
             p_container.start()
-
             subprocess.check_output(["/usr/bin/sudo", "/usr/bin/ovs-docker", "add-port", self._switch, "eth0", self._ports4u_name, "--ipaddress={}".format('172.16.3.1/24')])
+            
+            self._logger.info(f"Started container {self._ports4u_name}")
+            time.sleep(5)
 
         container = None
         if self._network:
@@ -118,7 +123,6 @@ class BaseContainer():
         self._logger.info(f"Started container {self._name}")
 
         if self._network:
-
             try:
                 subprocess.check_output(["/usr/bin/sudo", "/usr/bin/ovs-docker", "del-ports", self._switch, self._name], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
             except:
@@ -144,6 +148,17 @@ class BaseContainer():
             container = self._client.containers.get(self._name)
             container.stop()
 
+        container = self._client.containers.get(self._name)
+        main_docker_logs = container.logs().decode('utf8')
+        network_docker_logs = ""
+        if self._network:
+            p_container = self._client.containers.get(self._ports4u_name)
+            p_container.stop()
+            network_docker_logs = p_container.logs().decode('utf8')
+
+
+        return main_docker_logs, network_docker_logs
+
     def extract(self, cont_path, out_path):
         container = self._client.containers.get(self._name)
         strm, stat = container.get_archive(cont_path)
@@ -158,19 +173,22 @@ class BaseContainer():
 
         os.remove("/tmp/extract-data.tar")
 
-    def process_network(self, job_dir):
+    def process_network(self, job_obj):
         if self._network:
             tar_file = "/tmp/extract-network.tar"
             container = self._client.containers.get(self._ports4u_name)
-            strm, stat = container.get_archive("/opt/ports4u/logs")
-            results = open(tar_file, "wb")
-            for chunk in strm:
-                results.write(chunk)
-            results.close()
+            try:
+                strm, stat = container.get_archive("/opt/ports4u/logs")
+                results = open(tar_file, "wb")
+                for chunk in strm:
+                    results.write(chunk)
+                results.close()
 
-            results_tar = tarfile.open(tar_file, "r")
-            results_tar.extractall(path=os.path.join(job_dir, "network"))
-            results_tar.close()
+                results_tar = tarfile.open(tar_file, "r")
+                results_tar.extractall(path=os.path.join(job_obj.base_dir, "network"))
+                results_tar.close()
+            except docker.errors.NotFound:
+                pass
 
     def process(self, job_dir):
         raise NotImplementedError
