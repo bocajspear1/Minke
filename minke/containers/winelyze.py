@@ -15,6 +15,19 @@ class WinelyzeContainer(BaseContainer):
 
     def __init__(self, name, logger=None):
         super().__init__('winelyze', name, network=True, logger=logger)
+        self._interesting_syscalls = []
+        my_dir = os.path.dirname(os.path.realpath(__file__))
+        data_path = os.path.join(my_dir, "..", "data", "interesting_syscalls.txt")
+        data_file = open(data_path, "r")
+        syscall_list_raw = data_file.read()
+        data_file.close()
+        syscall_split = syscall_list_raw.split("\n")
+        for item in syscall_split:
+            if item.strip() != "":
+                self._interesting_syscalls.append(item.strip().lower())
+
+        self._string_map = {}
+
 
     def find_process_pid_string(self, lines, procname):
         i = 0 
@@ -110,13 +123,30 @@ class WinelyzeContainer(BaseContainer):
                     # print(("    " * depth) + "Found match: ", str(next_line))
                     resplit = next_line[1].split(" ")
                     retval = resplit[-2]
-                    calls.append({
-                        "api": api_name,
-                        "args": args,
-                        "ret": int(ret_id, 16),
-                        "call":  data.strip() + " " + retval,
-                        "subcalls": self._process_tid_calls(job_obj, raw_subcalls)[2]
-                    })
+
+                    # Resolve any strings
+                    for arg_i in range(len(args)):
+                        if args[arg_i] in self._string_map:
+                            args[arg_i] += self._string_map[args[arg_i]]
+                            
+
+
+                    skip = False
+                    # Check if this is a string init API call
+                    if api_name == "ntdll.rtlinitunicodestring" and len(args) == 2:
+                        skip = True
+                        self._string_map[args[0]] = args[1]
+                        # print(self._string_map)
+
+
+                    if not skip:
+                        calls.append({
+                            "api": api_name,
+                            "args": args,
+                            "ret": int(ret_id, 16),
+                            "call":  data.strip() + " " + retval,
+                            "subcalls": self._process_tid_calls(job_obj, raw_subcalls)[2]
+                        })
                 else:
                     calls.append({
                         "api": api_name,
@@ -140,6 +170,16 @@ class WinelyzeContainer(BaseContainer):
 
         return proc_name, loaded_libs, calls
 
+
+    def _flatten_syscalls(self, call_list, found=False):
+        return_list = []
+        for syscall in call_list:
+            if len(syscall['subcalls']) > 0:
+                return_list = self._flatten_syscalls(syscall['subcalls']) + return_list
+            if syscall['api'] in self._interesting_syscalls:
+                return_list.append(syscall)
+
+        return return_list
 
     def process(self, job_obj : MinkeJob):
 
@@ -233,9 +273,22 @@ class WinelyzeContainer(BaseContainer):
             "processes": new_pid_list
         }
 
-        output_file = open(os.path.join(job_obj.base_dir, "syscalls.json"), "w+")
+        output_file = open(os.path.join(job_obj.base_dir, "syscalls_raw.json"), "w+")
         json.dump(out_data, output_file, indent="    ")
         output_file.close()
+
+        self._logger.info("Flattening Wine syscalls...")
+
+        for pid in out_data['processes']:
+            for tid in out_data['processes'][pid]['threads']:
+                thread_list = out_data['processes'][pid]['threads'][tid]
+                flattened_list = self._flatten_syscalls(thread_list)
+                out_data['processes'][pid]['threads'][tid] = flattened_list
+
+        output_file = open(os.path.join(job_obj.base_dir, "syscalls_flattened.json"), "w+")
+        json.dump(out_data, output_file, indent="    ")
+        output_file.close()
+
 
         return True
 
