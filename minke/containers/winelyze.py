@@ -77,8 +77,11 @@ class WinelyzeContainer(BaseContainer):
                 for j in range(len(args)):
                     item = args[j]
                     if "L\"" in item:
-                        item_split = item.split("L\"")
-                        args[j] = "\"" + item_split[1]
+                        item_split = item.split("L\"", maxsplit=2)
+                        args[j] = "\"" + item_split[1].strip()
+                    elif "\"" in item:
+                        item_split = item.split("\"", maxsplit=2)
+                        args[j] = "\"" + item_split[1].strip()
 
                 if api_name in ("kernel32.createfilew", "kernel32.createfilea", "kernel32.createfiletransacteda", "kernel32.createfiletransacteda"):
                     access_mask = int(args[1], 16)
@@ -124,10 +127,14 @@ class WinelyzeContainer(BaseContainer):
                     resplit = next_line[1].split(" ")
                     retval = resplit[-2]
 
+                    retnum = -1
+                    if "=" in retval:
+                        retnum = int(retval.split("=")[1], 16)
+
                     # Resolve any strings
                     for arg_i in range(len(args)):
                         if args[arg_i] in self._string_map:
-                            args[arg_i] += self._string_map[args[arg_i]]
+                            args[arg_i] = self._string_map[args[arg_i]]
                             
 
 
@@ -137,15 +144,21 @@ class WinelyzeContainer(BaseContainer):
                         skip = True
                         self._string_map[args[0]] = args[1]
                         # print(self._string_map)
+                    elif api_name == "ntdll.rtlinitansistring" and len(args) == 2:
+                        skip = True
+                        self._string_map[args[0]] = args[1]
+                        # print(self._string_map)
 
 
                     if not skip:
+                        _, sub_loaded_libs, sub_syscalls = self._process_tid_calls(job_obj, raw_subcalls)
+                        loaded_libs += sub_loaded_libs
                         calls.append({
                             "api": api_name,
                             "args": args,
-                            "ret": int(ret_id, 16),
+                            "ret": retnum,
                             "call":  data.strip() + " " + retval,
-                            "subcalls": self._process_tid_calls(job_obj, raw_subcalls)[2]
+                            "subcalls": sub_syscalls
                         })
                 else:
                     calls.append({
@@ -165,6 +178,7 @@ class WinelyzeContainer(BaseContainer):
                         loaded_item_split = loaded_item.split("\\")
                         proc_name = loaded_item_split[len(loaded_item_split)-1]
                     elif ".dll" in loaded_item:
+                        loaded_item = loaded_item.replace("\\\\", "\\")
                         loaded_libs.append(loaded_item)
             i+=1
 
@@ -176,6 +190,7 @@ class WinelyzeContainer(BaseContainer):
         for syscall in call_list:
             if len(syscall['subcalls']) > 0:
                 return_list = self._flatten_syscalls(syscall['subcalls']) + return_list
+                syscall['subcalls'] = []
             if syscall['api'] in self._interesting_syscalls:
                 return_list.append(syscall)
 

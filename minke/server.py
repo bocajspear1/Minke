@@ -111,6 +111,7 @@ class SampleThread (threading.Thread):
                 app.logger.info("Analysis %s completed", job_obj.uuid)
                 job_obj.set_info('complete', True)
                 job_obj.save()
+                del container
             else:
                 app.logger.info("No analysis container found")
 
@@ -202,6 +203,7 @@ def sumbit_sample():
     
 
     new_job = MinkeJob.new(SAMPLE_DIR)
+    new_job.load()
 
     if multiple:
         execname = secure_filename(request.form['exec'])
@@ -227,22 +229,65 @@ def sumbit_sample():
         }
     })
 
-@app.route('/api/v1/job/<uuid>/info', methods=['GET'])
-def get_job_info(uuid):
+@app.route('/api/v1/job/<uuid_str>/info', methods=['GET'])
+def get_job_info(uuid_str):
     new_uuid = ""
     try:
-        new_uuid = str(uuid.UUID(uuid))
+        new_uuid = str(uuid.UUID(uuid_str))
     except:
         return jsonify({
             "ok": False,
             "error": "Invalid UUID"
         })
-    job_dir = os.path.join(SAMPLE_DIR, str(new_uuid))
-    if not os.path.exists(job_dir):
+
+    job_obj = MinkeJob(SAMPLE_DIR, new_uuid)
+    if not job_obj.exists():
         return jsonify({
             "ok": False,
             "error": "Job not found"
         })
+    else:
+        job_obj.load()
+        return jsonify({
+            "ok": False,
+            "result": {
+                "info": job_obj.get_info(),
+                "config": job_obj.get_config()
+            }
+        })
+
+
+@app.route('/api/v1/job/<uuid_str>/syscalls', methods=['GET'])
+def get_job_syscalls(uuid_str):
+    new_uuid = ""
+    try:
+        new_uuid = str(uuid.UUID(uuid_str))
+    except:
+        return jsonify({
+            "ok": False,
+            "error": "Invalid UUID"
+        })
+
+    job_obj = MinkeJob(SAMPLE_DIR, new_uuid)
+    if not job_obj.exists():
+        return jsonify({
+            "ok": False,
+            "error": "Job not found"
+        })
+    else:
+        syscalls = job_obj.get_flattened_syscalls()
+        ret_format = request.args.get('format')
+        if ret_format == "html":
+            return render_template('syscalls.html', syscalls=syscalls)
+        else:
+            return jsonify({
+            "ok": False,
+            "result": {
+                "syscalls": syscalls
+            }
+        })
+
+    
 
 if __name__== '__main__':
     app.run()

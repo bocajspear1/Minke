@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <!-- <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='mini-default.min.css') }}" /> -->
+        
+    </head>
+    <body>
+        {% for pid in syscalls['processes'] %}
+        <h1>Process: {{ syscalls['processes'][pid]['name'] }} ({{ pid }})</h1>
+        <details>
+            <summary>Libraries</summary>
+            <ul>
+            {% for library in syscalls['processes'][pid]['libraries'] %}
+                <li>{{ library }}</li>
+            {% endfor %}
+            </ul>
+        </details>
+        {% for tid in syscalls['processes'][pid]['threads'] %}
+            <h3>{{ tid }}</h3>
+            <details>
+                <summary>Syscalls</summary>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>API</th>
+                            <th>Ret</th>
+                            <th>Arg0</th>
+                            <th>Arg1</th>
+                            <th>Arg2</th>
+                            <th>Arg3</th>
+                            <th>Arg4</th>
+                            <th>Arg5</th>
+                            <th>Arg6</th>
+                            <th>Arg7</th>
+                            <th>Arg8</th>
+                            <th>Arg9</th>
+                        </tr>
+                    </thead>
+                    {% for syscall in syscalls['processes'][pid]['threads'][tid] %}
+                        <tr>
+                            <td>{{ syscall['api'] }}</td>
+                            <td>{{ '%0x' % syscall['ret'] }}</td>
+                            {% for arg in syscall['args'] %}
+                            <td>{{ arg }}</td>
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </table>
+            </details>
+        {% endfor %}
+        
+          
+        {% endfor %}
+    </body>
+</html>

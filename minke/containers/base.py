@@ -43,10 +43,19 @@ class BaseContainer():
                 pass 
 
     def __del__(self):
+        self.remove()
+
+    def _is_debug(self):
+        return os.getenv("MINKE_DEBUG") is not None
+
+    def remove(self):
         try:
             container = self._client.containers.get(self._name)
             container.stop()
             if not self._is_debug():
+                self._logger.info("Removing container %s", self._name)
+                if self._switch:
+                    subprocess.check_output(["/usr/bin/sudo", "/usr/bin/ovs-docker", "del-port", self._switch, "eth0", self._name])
                 container.remove()
         except docker.errors.NotFound:
             pass
@@ -57,6 +66,9 @@ class BaseContainer():
             container = self._client.containers.get(self._ports4u_name)
             container.stop()
             if not self._is_debug():
+                self._logger.info("Removing container %s", self._ports4u_name)
+                if self._switch:
+                    subprocess.check_output(["/usr/bin/sudo", "/usr/bin/ovs-docker", "del-port", self._switch, "eth0", self._ports4u_name])
                 container.remove()
         except docker.errors.NotFound:
             pass
@@ -64,11 +76,9 @@ class BaseContainer():
             pass 
 
         if self._switch is not None:
+            self._logger.info("Removing switch %s", self._switch)
             subprocess.check_output(["/usr/bin/sudo", "/usr/bin/ovs-vsctl", "del-br", self._switch])
-
-    def _is_debug(self):
-        return os.getenv("MINKE_DEBUG") is not None
-
+        
     def start(self, share_dir, env_vars=None):
 
         share_dir = os.path.abspath(share_dir)
@@ -161,17 +171,20 @@ class BaseContainer():
 
     def extract(self, cont_path, out_path):
         container = self._client.containers.get(self._name)
-        strm, stat = container.get_archive(cont_path)
-        results = open("/tmp/extract-data.tar", "wb")
-        for chunk in strm:
-            results.write(chunk)
-        results.close()
+        try:
+            strm, stat = container.get_archive(cont_path)
+            results = open("/tmp/extract-data.tar", "wb")
+            for chunk in strm:
+                results.write(chunk)
+            results.close()
 
-        results_tar = tarfile.open("/tmp/extract-data.tar", "r")
-        results_tar.extractall(path=out_path)
-        results_tar.close()
+            results_tar = tarfile.open("/tmp/extract-data.tar", "r")
+            results_tar.extractall(path=out_path)
+            results_tar.close()
 
-        os.remove("/tmp/extract-data.tar")
+            os.remove("/tmp/extract-data.tar")
+        except docker.errors.NotFound:
+            self._logger.info("Could not find file %s", cont_path)
 
     def process_network(self, job_obj):
         if self._network:
