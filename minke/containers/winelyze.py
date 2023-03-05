@@ -16,6 +16,9 @@ class WinelyzeContainer(BaseContainer):
     def __init__(self, name, logger=None):
         super().__init__('winelyze', name, network=True, logger=logger)
         self._interesting_syscalls = []
+        self._depth_map = {}
+        self._string_map = {}
+
         my_dir = os.path.dirname(os.path.realpath(__file__))
         data_path = os.path.join(my_dir, "..", "data", "interesting_syscalls.txt")
         data_file = open(data_path, "r")
@@ -24,10 +27,14 @@ class WinelyzeContainer(BaseContainer):
         syscall_split = syscall_list_raw.split("\n")
         for item in syscall_split:
             if item.strip() != "":
-                self._interesting_syscalls.append(item.strip().lower())
-
-        self._string_map = {}
-
+                if "|" in item:
+                    item_split = item.split("|")
+                    api_name = item_split[0].strip().lower()
+                    self._interesting_syscalls.append(api_name)
+                    self._depth_map[api_name] = int(item_split[len(item_split)-1])
+                    print(f"Set depth of {api_name} to {self._depth_map[api_name]}")
+                else:
+                    self._interesting_syscalls.append(item.strip().lower())
 
     def find_process_pid_string(self, lines, procname):
         i = 0 
@@ -100,8 +107,10 @@ class WinelyzeContainer(BaseContainer):
                             os.mkdir(f"{job_obj.base_dir}/extracted")
                         filename = os.path.basename(extract_path)
                         self.extract(extract_path, f"{job_obj.base_dir}/extracted")
-                        os.chmod(f"{job_obj.base_dir}/extracted/{filename}", stat.S_IREAD | stat.S_IRGRP | stat.S_IROTH)
-                        job_obj.add_info('written_files', filename)
+                        new_filename = f"{job_obj.base_dir}/extracted/{filename}"
+                        if os.path.exists(new_filename):
+                            os.chmod(new_filename, stat.S_IREAD | stat.S_IRGRP | stat.S_IROTH)
+                            job_obj.add_info('written_files', filename)
                         job_obj.save()
 
                 # Do ret processing
@@ -174,9 +183,9 @@ class WinelyzeContainer(BaseContainer):
                 if "Loaded" in data:
                     load_split = data.split(" ")
                     loaded_item = load_split[1][2:-1]
-                    if ".exe" in loaded_item:
+                    if loaded_item.endswith(".exe"):
                         loaded_item_split = loaded_item.split("\\")
-                        proc_name = loaded_item_split[len(loaded_item_split)-1]
+                        proc_name = loaded_item
                     elif ".dll" in loaded_item:
                         loaded_item = loaded_item.replace("\\\\", "\\")
                         loaded_libs.append(loaded_item)
@@ -185,14 +194,18 @@ class WinelyzeContainer(BaseContainer):
         return proc_name, loaded_libs, calls
 
 
-    def _flatten_syscalls(self, call_list, found=False):
+    def _flatten_syscalls(self, call_list, depth, found=False):
         return_list = []
         for syscall in call_list:
             if len(syscall['subcalls']) > 0:
-                return_list = self._flatten_syscalls(syscall['subcalls']) + return_list
+                return_list = self._flatten_syscalls(syscall['subcalls'], depth+1) + return_list
                 syscall['subcalls'] = []
             if syscall['api'] in self._interesting_syscalls:
-                return_list.append(syscall)
+                if syscall['api'] in self._depth_map:
+                    if int(self._depth_map[syscall['api']]) > depth:
+                        return_list.append(syscall)
+                else:
+                    return_list.append(syscall)
 
         return return_list
 
@@ -297,7 +310,7 @@ class WinelyzeContainer(BaseContainer):
         for pid in out_data['processes']:
             for tid in out_data['processes'][pid]['threads']:
                 thread_list = out_data['processes'][pid]['threads'][tid]
-                flattened_list = self._flatten_syscalls(thread_list)
+                flattened_list = self._flatten_syscalls(thread_list, 0)
                 out_data['processes'][pid]['threads'][tid] = flattened_list
 
         output_file = open(os.path.join(job_obj.base_dir, "syscalls_flattened.json"), "w+")

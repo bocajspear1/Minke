@@ -21,7 +21,8 @@ class MinkeJob():
         self._uuid = uuid
         self._config = {}
         self._info = {
-            'complete': False
+            'complete': False,
+            "written_files": []
         }
 
     def get_info(self):
@@ -104,6 +105,9 @@ class MinkeJob():
 
     def list_files(self):
         return os.listdir(self.files_dir)
+
+    def list_logs(self):
+        return os.listdir(self.logs_dir)
 
     def write_log(self, log_name, log_data):
         if not os.path.exists(self.logs_dir):

@@ -7,3 +7,4 @@ __pycache__/
 test/builder/out
 test/metasploit/out
 *.zip
+config.json

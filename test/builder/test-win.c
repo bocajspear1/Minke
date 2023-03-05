@@ -1,5 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include "windows.h"
+
+
+typedef void (WINAPI *PGNSI)(LPSYSTEM_INFO);
 
 int main() {
     FILE * f;
@@ -43,6 +47,17 @@ int main() {
     fclose(f);
 
     printf("Finished writing file\n");
+
+    // Got from https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getprocaddress
+    PGNSI pGNSI;
+    SYSTEM_INFO si;
+
+    ZeroMemory(&si, sizeof(SYSTEM_INFO));
+    
+    pGNSI = (PGNSI) GetProcAddress(GetModuleHandle(TEXT("kernel32.dll")), "GetNativeSystemInfo");
+    if (NULL != pGNSI) {
+        pGNSI(&si);
+    }
 
 
     system("C:\\Windows\\system32\\notepad.exe");

@@ -15,12 +15,13 @@ import time
 import stat
 import random
 import string
+import json
 
 from minke.containers.winelyze import WinelyzeContainer
 from minke.containers.extract import ExtractContainer
 from minke.lib.job import MinkeJob
 
-from flask import Flask, g, jsonify, current_app, request, render_template, send_from_directory
+from flask import Flask, g, jsonify, current_app, request, render_template, send_from_directory, make_response, abort
 from werkzeug.utils import secure_filename
 
 VERSION = '0.0.2'
@@ -110,6 +111,7 @@ class SampleThread (threading.Thread):
                 container.process_network(job_obj)
                 app.logger.info("Analysis %s completed", job_obj.uuid)
                 job_obj.set_info('complete', True)
+                job_obj.set_info('end_time', time.time())
                 job_obj.save()
                 del container
             else:
@@ -118,8 +120,21 @@ class SampleThread (threading.Thread):
             time.sleep(.5)
 
 def create_app():
+
+    config_path = "./config.json"
+    if 'MINKE_CONFIG_PATH' in os.environ:
+        config_path = os.environ['MINKE_CONFIG_PATH']
+
+    config_file = open(config_path, "r")
+    config_data = json.loads(config_file.read())
+    config_file.close()
+
+    if 'flask_key' not in config_data:
+        print("Flask key not set")
+        return
+
     app = Flask(__name__)
-    app.secret_key = os.environ['FLASK_KEY']
+    app.secret_key = config_data['flask_key']
 
     with app.app_context():
 
@@ -145,7 +160,11 @@ def create_app():
 
 app = create_app()
 
-@app.route('/api/v1/samples/count', methods = ['GET'])
+@app.route('/', methods = ['GET'])
+def index():
+    return render_template("index.html")
+
+@app.route('/api/v1/jobs/count', methods = ['GET'])
 def sample_count():
 
     sample_count = 0
@@ -159,12 +178,28 @@ def sample_count():
         }
     }) 
 
-@app.route('/api/v1/_version')
+@app.route('/api/v1/version')
 def version():
     return jsonify({
         "ok": True,
         "result": {
             "version": VERSION
+        }
+    })
+
+@app.route('/api/v1/jobs', methods=['GET'])
+def get_job_list():
+    sample_list_raw = os.listdir(SAMPLE_DIR)
+
+    sample_list = []
+    for item in sample_list_raw:
+        if item != ".." or item != ".":
+            sample_list.append(item)
+
+    return jsonify({
+        "ok": True,
+        "result": {
+            "jobs": sample_list
         }
     })
 
@@ -218,6 +253,7 @@ def sumbit_sample():
         file.save(new_path)
         new_job.setup_file(filename)
 
+    new_job.set_info('start_time', time.time())
     new_job.save()
 
     app._queue.put(new_job)
@@ -229,7 +265,7 @@ def sumbit_sample():
         }
     })
 
-@app.route('/api/v1/job/<uuid_str>/info', methods=['GET'])
+@app.route('/api/v1/jobs/<uuid_str>/info', methods=['GET'])
 def get_job_info(uuid_str):
     new_uuid = ""
     try:
@@ -256,8 +292,7 @@ def get_job_info(uuid_str):
             }
         })
 
-
-@app.route('/api/v1/job/<uuid_str>/syscalls', methods=['GET'])
+@app.route('/api/v1/jobs/<uuid_str>/syscalls', methods=['GET'])
 def get_job_syscalls(uuid_str):
     new_uuid = ""
     try:
@@ -287,7 +322,79 @@ def get_job_syscalls(uuid_str):
             }
         })
 
-    
+@app.route('/api/v1/jobs/<uuid_str>/logs', methods=['GET'])
+def get_job_logs(uuid_str):
+    new_uuid = ""
+    try:
+        new_uuid = str(uuid.UUID(uuid_str))
+    except:
+        return jsonify({
+            "ok": False,
+            "error": "Invalid UUID"
+        })
+
+    job_obj = MinkeJob(SAMPLE_DIR, new_uuid)
+    if not job_obj.exists():
+        return jsonify({
+            "ok": False,
+            "error": "Job not found"
+        })
+    else:
+        
+        return jsonify({
+            "ok": False,
+            "result": {
+                "logs": job_obj.list_logs()
+            }
+        })
+
+@app.route('/api/v1/jobs/<uuid_str>/logs/<log_name>', methods=['GET'])
+def get_job_log_data(uuid_str, log_name):
+    new_uuid = ""
+    try:
+        new_uuid = str(uuid.UUID(uuid_str))
+    except:
+        return "400: Invalid UUID", 400
+
+    job_obj = MinkeJob(SAMPLE_DIR, new_uuid)
+    if not job_obj.exists():
+        return "404: Job does not exist", 404
+    else:
+        log_data = job_obj.get_log(log_name)
+        if log_data is None:
+            return "404: Log does not exist", 404
+        else:
+            response = make_response(log_data, 200)
+            response.mimetype = "text/plain"
+            return response
+
+@app.route('/api/v1/jobs/<uuid_str>/networking', methods=['GET'])
+def get_job_networking(uuid_str):
+    new_uuid = ""
+    try:
+        new_uuid = str(uuid.UUID(uuid_str))
+    except:
+        return jsonify({
+            "ok": False,
+            "error": "Invalid UUID"
+        })
+
+    job_obj = MinkeJob(SAMPLE_DIR, new_uuid)
+    if not job_obj.exists():
+        return jsonify({
+            "ok": False,
+            "error": "Job not found"
+        })
+    else:
+        
+        return jsonify({
+            "ok": False,
+            "result": {
+                "connections": []
+            }
+        })
+
+       
 
 if __name__== '__main__':
     app.run()
