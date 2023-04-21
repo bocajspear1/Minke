@@ -16,6 +16,7 @@ import stat
 import random
 import string
 import json
+from functools import wraps
 
 from minke.containers.winelyze import WinelyzeContainer
 from minke.containers.extract import ExtractContainer
@@ -30,13 +31,15 @@ from flask.logging import default_handler
 
 SAMPLE_DIR= "./samples/"
 START_EXEC_KEY = 'start-exec'
+API_TOKEN_HEADER = 'x-api-key'
 
 class SampleThread (threading.Thread):
-    def __init__(self, id, queue):
+    def __init__(self, id, queue, config):
         threading.Thread.__init__(self)
         self._queue = queue 
         self._id = id
         self.daemon = True
+        self._config = config
 
     def run(self):
         while True:
@@ -53,8 +56,11 @@ class SampleThread (threading.Thread):
 
             sample_files = job_obj.list_files()
 
+            compressed = False
+
             for file_item in sample_files:
                 if job_obj.get_file_type(file_item) in ('application/zip',):
+                    compressed = True
                     app.logger.info("Detected compressed file %s, extracting...", file_item)
                     extract_cont = ExtractContainer("extract-" + job_obj.uuid)
                     extract_cont.start(job_obj.files_dir, {
@@ -62,8 +68,9 @@ class SampleThread (threading.Thread):
                     })
                     time.sleep(3)
                     extract_cont.process(job_obj)
+
                 
-            if execname.endswith(".zip"):
+            if compressed is True:
                 new_sample_files = job_obj.list_files()
                 new_sample_files.remove(execname)
 
@@ -75,11 +82,11 @@ class SampleThread (threading.Thread):
                     continue
                 else:
                     execname = new_sample_files[0]
+                job_obj.set_config_value(START_EXEC_KEY, execname)
+                job_obj.save()
 
 
             exec_type = job_obj.get_file_type(execname)
-
-            
 
             container = None
             container_name = ""
@@ -88,18 +95,22 @@ class SampleThread (threading.Thread):
                 container_name = f"winelyze-{job_obj.uuid}"
                 container = WinelyzeContainer(container_name, logger=app.logger)
 
-                app.logger.info("Using Winelyze container")
-                username = ''.join(random.choice(string.ascii_lowercase) for i in range(5))
+                app.logger.info("Using Winelyze container for sample %s", execname)
+                username = self._config['username']
+
                 screenshot = ''.join(random.choice(string.ascii_lowercase) for i in range(6))
                 log_file = ''.join(random.choice(string.ascii_lowercase) for i in range(8))
                 app.logger.debug("exec: %s, user: %s", execname, username)
 
-                container.start(job_obj.files_dir, {
+                ip_addr = container.start(job_obj.files_dir, {
                     "SAMPLENAME": execname,
                     "USER": username,
                     "SCREENSHOT": screenshot,
                     "LOG": log_file
                 })
+
+                job_obj.set_info('ip_addr', ip_addr)
+                job_obj.save()
 
             if container is not None:
                 main_logs, network_logs = container.wait_and_stop()
@@ -119,6 +130,32 @@ class SampleThread (threading.Thread):
 
             time.sleep(.5)
 
+
+
+def token_auth(f):
+    @wraps(f)
+    def decorator(*args, **kwargs):
+        token = None
+
+        if request.remote_addr == "127.0.0.1":
+            return f(*args, **kwargs)
+        
+        if API_TOKEN_HEADER in request.headers:
+            token = request.headers[API_TOKEN_HEADER]
+            if token != app.api_key:
+                return jsonify({
+                    "ok": False,
+                    "error": "Invalid API key"
+                })
+        else:
+            return jsonify({
+                "ok": False,
+                "error": "API key not set"
+            })
+        
+        return f(*args, **kwargs)
+    return decorator
+
 def create_app():
 
     config_path = "./config.json"
@@ -135,6 +172,7 @@ def create_app():
 
     app = Flask(__name__)
     app.secret_key = config_data['flask_key']
+    app.api_key = config_data['access_key']
 
     with app.app_context():
 
@@ -143,7 +181,7 @@ def create_app():
         THREAD_COUNT = 4
         app._sample_threads = []
         for i in range(THREAD_COUNT):
-            app._sample_threads.append(SampleThread(i, app._queue))
+            app._sample_threads.append(SampleThread(i, app._queue, config_data))
 
         if os.getenv("MINKE_DEBUG") is not None:
             app.logger.setLevel(logging.DEBUG)
@@ -157,7 +195,7 @@ def create_app():
         app.logger.info("Server %s started", VERSION)
 
     return app
-
+       
 app = create_app()
 
 @app.route('/', methods = ['GET'])
@@ -165,6 +203,7 @@ def index():
     return render_template("index.html")
 
 @app.route('/api/v1/jobs/count', methods = ['GET'])
+@token_auth
 def sample_count():
 
     sample_count = 0
@@ -188,6 +227,7 @@ def version():
     })
 
 @app.route('/api/v1/jobs', methods=['GET'])
+@token_auth
 def get_job_list():
     sample_list_raw = os.listdir(SAMPLE_DIR)
 
@@ -204,6 +244,7 @@ def get_job_list():
     })
 
 @app.route('/api/v1/samples/submit', methods=['POST'])
+@token_auth
 def sumbit_sample():
 
     if 'sample' not in request.files and 'samples' not in request.files:   
@@ -254,6 +295,7 @@ def sumbit_sample():
         new_job.setup_file(filename)
 
     new_job.set_info('start_time', time.time())
+    new_job.set_info('complete', False)
     new_job.save()
 
     app._queue.put(new_job)
@@ -266,6 +308,7 @@ def sumbit_sample():
     })
 
 @app.route('/api/v1/jobs/<uuid_str>/info', methods=['GET'])
+@token_auth
 def get_job_info(uuid_str):
     new_uuid = ""
     try:
@@ -285,7 +328,7 @@ def get_job_info(uuid_str):
     else:
         job_obj.load()
         return jsonify({
-            "ok": False,
+            "ok": True,
             "result": {
                 "info": job_obj.get_info(),
                 "config": job_obj.get_config()
@@ -293,6 +336,7 @@ def get_job_info(uuid_str):
         })
 
 @app.route('/api/v1/jobs/<uuid_str>/syscalls', methods=['GET'])
+@token_auth
 def get_job_syscalls(uuid_str):
     new_uuid = ""
     try:
@@ -323,6 +367,7 @@ def get_job_syscalls(uuid_str):
         })
 
 @app.route('/api/v1/jobs/<uuid_str>/logs', methods=['GET'])
+@token_auth
 def get_job_logs(uuid_str):
     new_uuid = ""
     try:
@@ -342,13 +387,14 @@ def get_job_logs(uuid_str):
     else:
         
         return jsonify({
-            "ok": False,
+            "ok": True,
             "result": {
                 "logs": job_obj.list_logs()
             }
         })
 
 @app.route('/api/v1/jobs/<uuid_str>/logs/<log_name>', methods=['GET'])
+@token_auth
 def get_job_log_data(uuid_str, log_name):
     new_uuid = ""
     try:
@@ -369,6 +415,7 @@ def get_job_log_data(uuid_str, log_name):
             return response
 
 @app.route('/api/v1/jobs/<uuid_str>/networking', methods=['GET'])
+@token_auth
 def get_job_networking(uuid_str):
     new_uuid = ""
     try:
@@ -386,15 +433,19 @@ def get_job_networking(uuid_str):
             "error": "Job not found"
         })
     else:
-        
+        job_obj.load()
         return jsonify({
-            "ok": False,
+            "ok": True,
             "result": {
-                "connections": []
+                "connections": job_obj.get_network_connections(),
+                "ip_list": job_obj.get_ip_list(),
+                "domains": job_obj.get_domains(),
+                "net_data": job_obj.get_network_data()
             }
         })
 
-       
+
 
 if __name__== '__main__':
+    
     app.run()

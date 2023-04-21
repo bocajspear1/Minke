@@ -132,14 +132,18 @@ class BaseContainer():
         container.start()
         self._logger.info(f"Started container {self._name}")
 
+        
+        ip_addr = None
         if self._network:
             try:
                 subprocess.check_output(["/usr/bin/sudo", "/usr/bin/ovs-docker", "del-ports", self._switch, self._name], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
             except:
                 pass
 
-            subprocess.check_output(["/usr/bin/sudo", "/usr/bin/ovs-docker", "add-port", self._switch, "eth0", self._name, "--ipaddress={}".format('172.16.3.4/24'), "--gateway={}".format('172.16.3.1')])
+            ip_addr = "172.16.3.4"
+            subprocess.check_output(["/usr/bin/sudo", "/usr/bin/ovs-docker", "add-port", self._switch, "eth0", self._name, "--ipaddress={}".format(f'{ip_addr}/24'), "--gateway={}".format('172.16.3.1')])
 
+        return ip_addr
 
     def wait_and_stop(self):
         i = 0

@@ -14,7 +14,7 @@ GENERIC_WRITE = 0x40000000
 class WinelyzeContainer(BaseContainer):
 
     def __init__(self, name, logger=None):
-        super().__init__('winelyze', name, network=True, logger=logger)
+        super().__init__('minke-winelyze', name, network=True, logger=logger)
         self._interesting_syscalls = []
         self._depth_map = {}
         self._string_map = {}
@@ -37,6 +37,7 @@ class WinelyzeContainer(BaseContainer):
                     self._interesting_syscalls.append(item.strip().lower())
 
     def find_process_pid_string(self, lines, procname):
+        print("Looking for " + procname)
         i = 0 
         while i < len(lines):
             line = lines[i]
@@ -84,10 +85,10 @@ class WinelyzeContainer(BaseContainer):
                 for j in range(len(args)):
                     item = args[j]
                     if "L\"" in item:
-                        item_split = item.split("L\"", maxsplit=2)
+                        item_split = item.split("L\"", maxsplit=1)
                         args[j] = "\"" + item_split[1].strip()
                     elif "\"" in item:
-                        item_split = item.split("\"", maxsplit=2)
+                        item_split = item.split("\"", maxsplit=1)
                         args[j] = "\"" + item_split[1].strip()
 
                 if api_name in ("kernel32.createfilew", "kernel32.createfilea", "kernel32.createfiletransacteda", "kernel32.createfiletransacteda"):
@@ -235,20 +236,31 @@ class WinelyzeContainer(BaseContainer):
 
         # Trim for "start.exe"
         start_pid, i = self.find_process_pid_string(lines, "start.exe")
-        lines = lines[i:]
+        if start_pid != "":
+            lines = lines[i:]
         # Trim for wineconsole
         wineconsole_pid, i = self.find_process_pid_string(lines, "wineconsole.exe")
-        lines = lines[i:]
-        # Trim for wineconsole
+        if wineconsole_pid != "":
+            lines = lines[i:]
+        # Trim for conhost
         conhost_pid, i = self.find_process_pid_string(lines, "conhost.exe")
+        if conhost_pid != "":
+            lines = lines[i:]
 
         # Remove all calls from wineconsole and start.exe
         new_lines = []
+
         for line in lines:
-            if not line.startswith(start_pid) and not line.startswith(wineconsole_pid) \
-                and not line.startswith(conhost_pid) and not line.startswith("Call window proc") \
-                and not ": stub" in line:
-                new_lines.append(line)
+            if start_pid != "" and line.startswith(start_pid):
+                continue
+            if wineconsole_pid != "" and line.startswith(wineconsole_pid):
+                continue
+            if conhost_pid != "" and line.startswith(conhost_pid):
+                continue
+            # if not line.startswith(start_pid) and not line.startswith(wineconsole_pid) \
+            #     and not line.startswith(conhost_pid) and not line.startswith("Call window proc") \
+            #     and not ": stub" in line:
+            new_lines.append(line)
 
         # Get PID for sample
         sample_pid, _ = self.find_process_pid_string(new_lines, execsample)

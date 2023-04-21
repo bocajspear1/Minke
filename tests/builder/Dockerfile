@@ -15,6 +15,7 @@ ENV PATH=$PATH:/usr/local/go/bin
 COPY Makefile .
 COPY test.c .
 COPY test.go .
+COPY win-shared.h .
 COPY test-win.c .
 COPY test-win.go .
 COPY test-dll.c .

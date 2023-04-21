@@ -15,10 +15,10 @@ all:
 	gcc -m64 -static -o /tmp/out/test-static.x86-64 /opt/test.c
 	gcc -m32 -static -o /tmp/out/test-static.x86 /opt/test.c
 
-	i686-w64-mingw32-gcc-win32 -o /tmp/out/test.x86.exe /opt/test-win.c
-	i686-w64-mingw32-gcc-win32 -shared -o /tmp/out/test.x86.dll /opt/test-dll.c
-	x86_64-w64-mingw32-gcc-win32 -o /tmp/out/test.x86-64.exe /opt/test-win.c
-	x86_64-w64-mingw32-gcc-win32 -shared -o /tmp/out/test.x86-64.dll /opt/test-dll.c
+	i686-w64-mingw32-gcc-win32 /opt/test-win.c -o /tmp/out/test.x86.exe -lws2_32 
+	i686-w64-mingw32-gcc-win32 -shared -o /tmp/out/test.x86.dll -lws2_32
+	x86_64-w64-mingw32-gcc-win32 /opt/test-win.c /opt/test-dll.c -o /tmp/out/test.x86-64.exe -lws2_32
+	x86_64-w64-mingw32-gcc-win32 /opt/test-dll.c -shared -o /tmp/out/test.x86-64.dll -lws2_32
 
 	GOOS=linux GOARCH=386 go build -o /tmp/out/test-go.x86 test.go
 	GOOS=linux GOARCH=amd64 go build -o /tmp/out/test-go.x64 test.go

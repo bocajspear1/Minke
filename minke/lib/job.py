@@ -4,8 +4,12 @@ import os
 import json
 import stat
 import copy
+import re
+import base64
 
 import magic
+
+from .helper import file_clean
 
 class MinkeJob():
 
@@ -85,12 +89,13 @@ class MinkeJob():
             elif isinstance(self._info[key], list):
                 self._info[key].append(data)
         else:
-            self._info[key] = data
+            self._info[key] = [data]
 
     def set_info(self, key, data):
         self._info[key] = data
 
     def setup_file(self, filename):
+        filename = file_clean(filename)
         file_path = os.path.join(self.files_dir, filename)
         os.chmod(file_path, stat.S_IREAD | stat.S_IRGRP | stat.S_IROTH)
 
@@ -110,6 +115,7 @@ class MinkeJob():
         return os.listdir(self.logs_dir)
 
     def write_log(self, log_name, log_data):
+        log_name = file_clean(log_name)
         if not os.path.exists(self.logs_dir):
             os.mkdir(self.logs_dir)
         out_file = open(os.path.join(self.logs_dir, log_name), "w")
@@ -117,6 +123,7 @@ class MinkeJob():
         out_file.close()
 
     def get_log(self, log_name):
+        log_name = file_clean(log_name)
         log_path = os.path.join(self.logs_dir, log_name)
         if not os.path.exists(log_path):
             return None
@@ -138,6 +145,74 @@ class MinkeJob():
             return None
 
         return json.loads(syscall_data)
+
+    def _get_ports4u_log(self, logname, raw=False):
+        logname = file_clean(logname)
+
+        net_log_dir = os.path.join(self.network_dir, "logs")
+
+        net_data_path = os.path.join(net_log_dir, logname)
+        if os.path.exists(net_data_path):
+            flag = "r"
+            if raw is True:
+                flag = "rb"
+            net_data_file = open(net_data_path, flag)
+            net_data = net_data_file.read()
+            net_data_file.close()
+            return net_data.strip()
+        else:
+            return None
+
+    def get_network_connections(self):
+        conn_data = self._get_ports4u_log("conn_list.txt")
+        if conn_data is not None:
+            ret_list = []
+            for item in conn_data.split("\n"):
+                if item.strip() != "" and "<nil>" not in item:
+                    ret_list.append(item.strip())
+            return ret_list
+        else:
+            return []
+
+    def get_ip_list(self):
+        ip_data = self._get_ports4u_log("ip_list.txt")
+        if ip_data is not None:
+            return ip_data.split("\n")
+        else:
+            return []
+
+    def get_domains(self):
+        domain_data = self._get_ports4u_log("domains.txt")
+        if domain_data is not None:
+            return domain_data.split("\n")
+        else:
+            return []
+
+    def get_network_data(self):
+        conn_data = self.get_network_connections()
+        ret_dict = {}
+        for conn in conn_data:
+            conn_split = conn.split("|")
+            ip_addr = self._info['ip_addr']
+            port = conn_split[2]
+
+            conn_log_data = self._get_ports4u_log(f"{ip_addr}-{port}.log", raw=True)
+
+            if conn_log_data is not None:
+                ret_dict[conn] = []
+
+                conn_split = re.split(b'<<<<<<<< [0-9.]+ ----------------------------', conn_log_data)
+                for conn_section in conn_split:
+                    
+                    if conn_section.strip() == b"":
+                        continue
+                    dir_split = re.split(b'>>>>>>>> [0-9.]+ ----------------------------', conn_section)
+                    if len(dir_split) == 1:
+                        ret_dict[conn].append([base64.b64encode(dir_split[0]).decode(), ''])
+                    else:
+                        ret_dict[conn].append([base64.b64encode(dir_split[0]).decode(), base64.b64encode(dir_split[1]).decode()])
+
+            return ret_dict
 
     @property
     def uuid(self):
@@ -162,6 +237,10 @@ class MinkeJob():
     @property
     def logs_dir(self):
         return os.path.join(self.base_dir, "logs")
+
+    @property
+    def network_dir(self):
+        return os.path.join(self.base_dir, "network")
 
     @property
     def is_done(self):

@@ -4,7 +4,10 @@ samples/
 __pycache__/
 *.pem
 *.log
-test/builder/out
-test/metasploit/out
+tests/builder/out
+tests/metasploit/out
 *.zip
 config.json
+.vscode
+.pytest_cache
+.coverage
