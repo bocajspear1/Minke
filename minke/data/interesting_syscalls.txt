@@ -40,6 +40,9 @@ iphlpapi.GetAdaptersInfo
 iphlpapi.GetBestInterfaceEx
 iphlpapi.GetInterfaceInfo
 kernel32.CheckRemoteDebuggerPresent
+KERNEL32.CompareStringA
+kernel32.CompareStringOrdinal
+KERNEL32.CompareStringW
 kernel32.CopyFileA
 kernel32.CopyFileExA
 kernel32.CopyFileExW
@@ -87,6 +90,7 @@ kernel32.GetVolumePathNamesForVolumeNameA
 kernel32.GetVolumePathNamesForVolumeNameW
 kernel32.GetVolumePathNameW
 kernel32.IsDebuggerPresent
+kernel32.lstrcmpiW
 kernel32.LoadLibraryA
 kernel32.LoadLibraryW
 kernel32.LoadLibraryExA
@@ -113,8 +117,13 @@ kernel32.VirtualQueryEx
 kernel32.VirtualProtect
 kernel32.VirtualProtectEx
 kernel32.WinExec
+kernel32.WriteConsoleA
+kernel32.WriteConsoleW
 kernel32.WriteProcessMemory
 mpr.WNetGetProviderNameW
+msvcrt.puts
+ntdll.LdrFindResource_U
+ntdll.LdrAccessResource
 ntdll.NtClose
 ntdll.NtCreateDirectoryObject
 ntdll.NtCreateFile

@@ -25,7 +25,7 @@ from minke.lib.job import MinkeJob
 from flask import Flask, g, jsonify, current_app, request, render_template, send_from_directory, make_response, abort
 from werkzeug.utils import secure_filename
 
-VERSION = '0.0.2'
+VERSION = '0.1.1'
 
 from flask.logging import default_handler
 
@@ -51,7 +51,7 @@ class SampleThread (threading.Thread):
             
             execname = job_obj.get_config_value(START_EXEC_KEY)
             if execname is None:
-                print("Got job with not exec-start")
+                app.logger.error("Got job with not exec-start")
                 continue
 
             sample_files = job_obj.list_files()
@@ -126,7 +126,7 @@ class SampleThread (threading.Thread):
                 job_obj.save()
                 del container
             else:
-                app.logger.info("No analysis container found")
+                app.logger.error("No analysis container found")
 
             time.sleep(.5)
 
@@ -247,6 +247,7 @@ def get_job_list():
 @token_auth
 def sumbit_sample():
 
+    print(request.files)
     if 'sample' not in request.files and 'samples' not in request.files:   
         return jsonify({
             "ok": False,
@@ -354,17 +355,12 @@ def get_job_syscalls(uuid_str):
             "error": "Job not found"
         })
     else:
-        syscalls = job_obj.get_flattened_syscalls()
-        ret_format = request.args.get('format')
-        if ret_format == "html":
-            return render_template('syscalls.html', syscalls=syscalls)
-        else:
-            return jsonify({
-            "ok": False,
-            "result": {
-                "syscalls": syscalls
-            }
+        syscall_data = job_obj.get_flattened_syscalls()
+        return jsonify({
+            "ok": True,
+            "result": syscall_data
         })
+
 
 @app.route('/api/v1/jobs/<uuid_str>/logs', methods=['GET'])
 @token_auth
@@ -444,7 +440,63 @@ def get_job_networking(uuid_str):
             }
         })
 
+@app.route('/api/v1/jobs/<uuid_str>/screenshots', methods=['GET'])
+@token_auth
+def get_job_screenshots(uuid_str):
+    new_uuid = ""
+    try:
+        new_uuid = str(uuid.UUID(uuid_str))
+    except:
+        return jsonify({
+            "ok": False,
+            "error": "Invalid UUID"
+        })
 
+    job_obj = MinkeJob(SAMPLE_DIR, new_uuid)
+    if not job_obj.exists():
+        return jsonify({
+            "ok": False,
+            "error": "Job not found"
+        })
+    else:
+        job_obj.load()
+        screenshot_list = os.listdir(job_obj.screenshot_dir)
+        screenshot_list.sort()
+        return jsonify({
+            "ok": True,
+            "result": {
+                "screenshots": screenshot_list
+            }
+        })
+
+@app.route('/api/v1/jobs/<uuid_str>/screenshots/<screenshot>', methods=['GET'])
+@token_auth
+def get_job_screenshot_image(uuid_str, screenshot):
+    new_uuid = ""
+    try:
+        new_uuid = str(uuid.UUID(uuid_str))
+    except:
+        return jsonify({
+            "ok": False,
+            "error": "Invalid UUID"
+        })
+
+    job_obj = MinkeJob(SAMPLE_DIR, new_uuid)
+    if not job_obj.exists():
+        return jsonify({
+            "ok": False,
+            "error": "Job not found"
+        })
+    else:
+        job_obj.load()
+        screenshot_type, screenshot_data = job_obj.get_screenshot(screenshot)
+        if screenshot_data is None:
+            return "404: Screenshot does not exist", 404
+        else:
+            response = make_response(screenshot_data, 200)
+            response.mimetype = screenshot_type
+            return response
+                
 
 if __name__== '__main__':
     

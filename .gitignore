@@ -1,6 +1,8 @@
 .flask_key
 venv/
 samples/
+samples-last/
+samples-backup/
 __pycache__/
 *.pem
 *.log
@@ -11,3 +13,4 @@ config.json
 .vscode
 .pytest_cache
 .coverage
+*.winedump

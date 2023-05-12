@@ -6,6 +6,7 @@ import stat
 import copy
 import re
 import base64
+import shutil
 
 import magic
 
@@ -214,6 +215,26 @@ class MinkeJob():
 
             return ret_dict
 
+    def add_screenshot(self, start_path):
+        if not os.path.exists(self.screenshot_dir):
+            os.mkdir(self.screenshot_dir)
+        
+        screenshots = os.listdir(self.screenshot_dir)
+        screenshot_count = len(screenshots)
+        extension = start_path.split(".")[-1]
+        shutil.copy(start_path, os.path.join(self.screenshot_dir, f"{screenshot_count}.{extension}"))
+
+    def get_screenshot(self, screenshot_name):
+        screenshot_path = os.path.join(self.screenshot_dir, screenshot_name)
+        if not os.path.exists(screenshot_path):
+            return None, None
+        else:
+            screenshot_file = open(screenshot_path, "rb")
+            screenshot_data = screenshot_file.read()
+            filetype = magic.from_buffer(screenshot_data)
+            screenshot_file.close()
+            return filetype, screenshot_data
+
     @property
     def uuid(self):
         return str(self._uuid)
@@ -241,6 +262,10 @@ class MinkeJob():
     @property
     def network_dir(self):
         return os.path.join(self.base_dir, "network")
+
+    @property
+    def screenshot_dir(self):
+        return os.path.join(self.base_dir, "screenshots")
 
     @property
     def is_done(self):

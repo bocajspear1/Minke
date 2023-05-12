@@ -17,7 +17,6 @@ class ExtractContainer(BaseContainer):
         out_files = os.listdir(os.path.join(newfiles, "out"))
         
         for item in out_files:
-            print(item)
             new_path = job_obj.add_file(item)
             shutil.move(os.path.join(newfiles, "out", item), new_path)
             job_obj.setup_file(item)
