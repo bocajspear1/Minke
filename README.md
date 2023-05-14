@@ -29,7 +29,7 @@ Download the project. Then create virtual environment and install Python depende
 python3 -m venv ./venv
 source ./venv/bin/activate
 pip3 install -r requirements.txt
-pip3 install -r requirements.txt # Only if developing or testing
+pip3 install -r requirements-dev.txt # Only if developing or testing
 ```
 
 Then build the containers:
