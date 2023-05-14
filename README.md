@@ -32,6 +32,8 @@ pip3 install -r requirements.txt
 pip3 install -r requirements-dev.txt # Only if developing or testing
 ```
 
+Add the sudoers file so Minke can before network functionality. The file is located in `files/minke-sudoers`. Add this to your `/etc/sudoers.d/` directory.
+
 Then build the containers:
 ```
 python3 minke/build.py
