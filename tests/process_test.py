@@ -3,7 +3,7 @@ import json
 
 import pytest
 from minke.containers.winelyze import process_wine_calls, flatten_process_syscalls, load_syscall_map
-from tests.helpers import any_thread_has_api_call, has_child_process
+from tests.helpers import any_thread_has_api_call, has_child_process, in_order, thread_has_api_call
 
 
 def _dump_json(data, name):
@@ -19,6 +19,9 @@ def test_winelyze_process():
     assert os.path.exists(syscalls_path)
 
     meterpreter_results = process_wine_calls(syscalls_path)
+
+    assert in_order(meterpreter_results[0]) == True
+
     assert any_thread_has_api_call(meterpreter_results[0], "wininet.httpsendrequesta")
     assert any_thread_has_api_call(meterpreter_results[0], "wininet.httpopenrequesta", args=[
         "00000002","00000000",'"/y4l0dLhR98fynPOelrQmgwEJPwUEc3clB9g6"',"00000000","00000000","00000000","84280200","00000000"
@@ -41,6 +44,11 @@ def test_winelyze_process():
         "00000001",'"10.10.10.3"',"00000050","00000000","00000000","00000003","00000000","00000000"
     ], subcall=False)
 
+    # _dump_json(meterpreter_results, "test-dump.json")
+    assert in_order(meterpreter_results[0]) == True
+    
+    
+
     # assert False == True
 
 def test_winelyze_process_builder():
@@ -50,6 +58,8 @@ def test_winelyze_process_builder():
     assert os.path.exists(syscalls_path)
 
     builder_results = process_wine_calls(syscalls_path)
+
+    assert in_order(builder_results[0]) == True
     
     assert any_thread_has_api_call(builder_results[0], "msvcrt.puts", args=['"Hello there from x86-64"'])
     assert any_thread_has_api_call(builder_results[0], "ws2_32.wsastartup")
@@ -75,5 +85,31 @@ def test_winelyze_process_builder():
     ])
     assert has_child_process(builder_results[0], "cmd.exe")
     assert has_child_process(builder_results[0], "notepad.exe")
+
+    # assert False == True
+
+def test_winelyze_multi_thread():
+    file_dir = os.path.abspath(os.path.dirname(__file__))
+    
+    syscalls_path = os.path.join(file_dir, "files/multi-thread.winedump")
+    assert os.path.exists(syscalls_path)
+
+    builder_results = process_wine_calls(syscalls_path)
+
+    assert in_order(builder_results[0]) == True
+
+    # _dump_json(builder_results, "multi.json")
+    
+    assert thread_has_api_call(244, builder_results[0], "advapi32.regopenkeyexa")
+    assert thread_has_api_call(256, builder_results[0], "advapi32.regopenkeyexa")
+
+    my_dir = os.path.dirname(os.path.realpath(__file__))
+    data_path = os.path.join(my_dir, "..", "minke", "data", "interesting_syscalls.txt")
+    syscall_map = load_syscall_map(data_path)
+
+    flatten_process_syscalls(syscall_map, builder_results)
+
+    assert thread_has_api_call("244", builder_results[0], "advapi32.regopenkeyexa")
+    assert thread_has_api_call("256", builder_results[0], "advapi32.regopenkeyexa")
 
     # assert False == True

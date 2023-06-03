@@ -14,3 +14,4 @@ config.json
 .pytest_cache
 .coverage
 *.winedump
+prof/*

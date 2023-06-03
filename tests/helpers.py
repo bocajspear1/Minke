@@ -31,6 +31,19 @@ def any_thread_has_api_call(proc_data, api_name, args=None, subcall=False):
     
     return False
 
+def thread_has_api_call(thread_id, proc_data, api_name, args=None, subcall=False):
+    for tid in proc_data['threads']:
+        if int(tid) == int(thread_id):
+            thread_data = proc_data['threads'][tid]
+            found_thread = _has_api_call(thread_data, api_name, args=args, subcall=subcall)
+            if found_thread:
+                return True
+            else:
+                return False
+    
+    print("Not found")
+    return False
+
 def has_child_process(proc_data, child_name):
     for child in proc_data['child_processes']:
         proc_name = child['path'].split("\\")[-1]
@@ -42,3 +55,33 @@ def has_child_process(proc_data, child_name):
             return True
     
     return False
+
+
+def _is_in_order(syscall_list):
+    counter = 0
+    for syscall in syscall_list:
+        if syscall["counter"] > counter:
+            counter = syscall["counter"]
+            # print(counter)
+            if len(syscall['subcalls']) > 0:
+                sub_counter = _is_in_order(syscall['subcalls'])
+                if sub_counter == 0:
+                    return 0
+                elif sub_counter <= counter:
+                    return 0
+                else:
+                    # print(f"{counter} => {sub_counter}")
+                    counter = sub_counter
+                    
+        else:
+            return 0
+    return counter
+
+def in_order(proc_data):
+    for tid in proc_data['threads']:
+        thread_data = proc_data['threads'][tid]
+        counter = _is_in_order(thread_data)
+        if counter == 0:
+            return False
+    
+    return True

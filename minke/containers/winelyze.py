@@ -22,7 +22,10 @@ def process_subcalls(string_map, lib_list, child_procs, extract_files, new_subca
         line = new_subcall_list[i]
         oper = line[0]
         data = line[1]
+        counter = line[2]
+
         if oper == "Call":
+            
             # We need the "ret" value to determine return value for call
             # Check to ensure we have it, not having it should not happen often
             if "ret=" not in data:
@@ -130,7 +133,8 @@ def process_subcalls(string_map, lib_list, child_procs, extract_files, new_subca
                         "args": args,
                         "ret": retnum,
                         "call":  data.strip() + " " + retval,
-                        "subcalls": sub_syscalls
+                        "subcalls": sub_syscalls,
+                        "counter": counter
                     })
             # Not found, just try our best
             else:
@@ -140,9 +144,10 @@ def process_subcalls(string_map, lib_list, child_procs, extract_files, new_subca
                     "ret": "???",
                     "call":  data.strip() + " retval=???",
                     # "subcalls": get_called(raw_subcalls, depth+1)
-                    "subcalls": []
+                    "subcalls": [],
+                    "counter": counter
                 })
-                i = i_start+1
+                i = i_start
         elif "trace:loaddll:build_module" in oper:
             if "Loaded" in data:
                 loaded_path = line[1].split('"')[1]
@@ -166,6 +171,7 @@ def process_subprocess(process_name, lines):
     proc_threads = {}
     loaded_libs = []
     to_remove = []
+    counter = 0
     
     # Extract all lines that belong to this process
     for i in range(len(lines)):
@@ -183,12 +189,18 @@ def process_subprocess(process_name, lines):
 
         if start > -1 and end == -1 and line_split[0] == pid:
             # Parse out the TID and put in separate lists
-            tid = line_split[1]
+            tid = int(line_split[1], 16)
             if tid not in proc_threads:
                 proc_threads[tid] = []
             data_split = line_split[2].split(" ", 1)
             data_split[0] = data_split[0].strip()
             data_split[1] = data_split[1].strip()
+            if data_split[0] == "Call":
+                data_split.append(counter)
+                counter += 1
+            else:
+                data_split.append("Z")
+            
             proc_threads[tid].append(data_split)
             to_remove.append(line)
 
@@ -204,9 +216,8 @@ def process_subprocess(process_name, lines):
     
     # print(proc_lines)
     for tid in proc_threads:
-        thread_calls = proc_threads[tid]
         string_map = {}
-        thread_out_map[int(tid, 16)] = process_subcalls(string_map, loaded_libs, child_processes, extract_files, thread_calls)
+        thread_out_map[tid] = process_subcalls(string_map, loaded_libs, child_processes, extract_files, proc_threads[tid])
     
     for child_process in child_processes:
         child_out_list.append(process_subprocess(child_process, lines))
@@ -226,6 +237,7 @@ def process_wine_calls(wine_file):
     dump_file.close()
 
     lines = dump_data.split("\n")
+    
     all_procs = []
     main_tree_data = process_subprocess("start.exe", lines)
     # start.exe and wineconsole.exe are the top of the tree
@@ -274,9 +286,6 @@ def load_syscall_map(syscall_file):
 def flatten_thread_syscalls(interesting_syscalls, thread_list, depth):
     return_list = []
     for syscall in thread_list:
-        if len(syscall['subcalls']) > 0:
-            return_list = flatten_thread_syscalls(interesting_syscalls, syscall['subcalls'], depth+1) + return_list
-            syscall['subcalls'] = []
         if syscall['api'] in interesting_syscalls:
             max_depth = interesting_syscalls[syscall['api']]
             if max_depth != -1:
@@ -284,6 +293,10 @@ def flatten_thread_syscalls(interesting_syscalls, thread_list, depth):
                     return_list.append(syscall)
             else:
                 return_list.append(syscall)
+        if len(syscall['subcalls']) > 0:
+            return_list = return_list + flatten_thread_syscalls(interesting_syscalls, syscall['subcalls'], depth+1)
+            syscall['subcalls'] = []
+        
 
     return return_list
 
