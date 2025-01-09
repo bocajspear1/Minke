@@ -3,6 +3,7 @@ import json
 
 import pytest
 from minke.containers.winelyze import process_wine_calls, flatten_process_syscalls, load_syscall_map
+from minke.containers.qemu import process_strace_calls
 from tests.helpers import any_thread_has_api_call, has_child_process, in_order, thread_has_api_call
 
 
@@ -47,8 +48,6 @@ def test_winelyze_process():
     # _dump_json(meterpreter_results, "test-dump.json")
     assert in_order(meterpreter_results[0]) == True
     
-    
-
     # assert False == True
 
 def test_winelyze_process_builder():
@@ -88,6 +87,35 @@ def test_winelyze_process_builder():
 
     # assert False == True
 
+def test_winelyze_process_builder2():
+    file_dir = os.path.abspath(os.path.dirname(__file__))
+    
+    syscalls_path = os.path.join(file_dir, "files/builder2.winedump")
+    assert os.path.exists(syscalls_path)
+
+    builder_results = process_wine_calls(syscalls_path)
+
+    assert in_order(builder_results[0]) == True
+
+    # _dump_json(builder_results, "builder2.json")
+    
+    assert any_thread_has_api_call(builder_results[0], "msvcrt.puts", args=['"Hello there from x86-64"'])
+    assert any_thread_has_api_call(builder_results[0], "ws2_32.wsastartup")
+    assert any_thread_has_api_call(builder_results[0], "ws2_32.getaddrinfo", subcall=False, args=['"192.168.122.198"','"8080"',"0199fb70","0199fb68"])
+
+    my_dir = os.path.dirname(os.path.realpath(__file__))
+    data_path = os.path.join(my_dir, "..", "minke", "data", "interesting_syscalls.txt")
+    syscall_map = load_syscall_map(data_path)
+
+    flatten_process_syscalls(syscall_map, builder_results)
+
+    assert any_thread_has_api_call(builder_results[0], "msvcrt.puts", subcall=False, args=['"Hello there from x86-64"'])
+    assert any_thread_has_api_call(builder_results[0], "ws2_32.wsastartup", subcall=False)
+    assert any_thread_has_api_call(builder_results[0], "ws2_32.getaddrinfo", subcall=False, args=['"192.168.122.198"','"8080"',"0199fb70","0199fb68"])
+    
+
+    # assert False == True
+
 def test_winelyze_multi_thread():
     file_dir = os.path.abspath(os.path.dirname(__file__))
     
@@ -111,5 +139,32 @@ def test_winelyze_multi_thread():
 
     assert thread_has_api_call("244", builder_results[0], "advapi32.regopenkeyexa")
     assert thread_has_api_call("256", builder_results[0], "advapi32.regopenkeyexa")
+
+    # assert False == True
+
+
+def test_mipsel_strace():
+    file_dir = os.path.abspath(os.path.dirname(__file__))
+    
+    syscalls_path = os.path.join(file_dir, "files/mipsel.strace")
+    assert os.path.exists(syscalls_path)
+
+    builder_results = process_strace_calls(syscalls_path)
+
+    # assert in_order(builder_results[0]) == True
+
+    _dump_json(builder_results, "strace.json")
+    
+    # assert thread_has_api_call(244, builder_results[0], "advapi32.regopenkeyexa")
+    # assert thread_has_api_call(256, builder_results[0], "advapi32.regopenkeyexa")
+
+    # my_dir = os.path.dirname(os.path.realpath(__file__))
+    # data_path = os.path.join(my_dir, "..", "minke", "data", "interesting_syscalls.txt")
+    # syscall_map = load_syscall_map(data_path)
+
+    # flatten_process_syscalls(syscall_map, builder_results)
+
+    # assert thread_has_api_call("244", builder_results[0], "advapi32.regopenkeyexa")
+    # assert thread_has_api_call("256", builder_results[0], "advapi32.regopenkeyexa")
 
     # assert False == True

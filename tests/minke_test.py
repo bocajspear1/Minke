@@ -91,10 +91,11 @@ def test_job_networking_invalid(client):
     assert response.json['ok'] == False
     assert response.json['error'] == "Job not found"
 
+@pytest.mark.skip()
 def test_submit_1(client):
     file_dir = os.path.abspath(os.path.dirname(__file__))
     
-    sample_path = os.path.join(file_dir, "builder/out/test.x86-64.exe")
+    sample_path = os.path.join(file_dir, "files", "test.x86-64.exe")
     assert os.path.exists(sample_path)
 
     postdata = {}

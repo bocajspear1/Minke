@@ -19,6 +19,7 @@ import json
 from functools import wraps
 
 from minke.containers.winelyze import WinelyzeContainer
+from minke.containers.qemu import QEMUMIPSELContainer
 from minke.containers.extract import ExtractContainer
 from minke.lib.job import MinkeJob
 
@@ -91,6 +92,8 @@ class SampleThread (threading.Thread):
             container = None
             container_name = ""
 
+            print(exec_type)
+
             if exec_type in ('application/x-dosexec',) :
                 container_name = f"winelyze-{job_obj.uuid}"
                 container = WinelyzeContainer(container_name, logger=app.logger)
@@ -111,6 +114,34 @@ class SampleThread (threading.Thread):
 
                 job_obj.set_info('ip_addr', ip_addr)
                 job_obj.save()
+            elif exec_type in ('application/x-executable',):
+                file_id = job_obj.get_file_id(execname).lower()
+
+                if "lsb executable" in file_id and ("mips32" in file_id or ("32-bit" in file_id and "mips" in file_id)):
+                    container_name = f"qemu-mipsel-{job_obj.uuid}"
+                    container = QEMUMIPSELContainer(container_name, logger=app.logger)
+                    app.logger.info("Using QEMU MIPSEL container for sample %s", execname)
+                else:
+                    pass
+
+                if container is not None:
+                    
+                    username = self._config['username']
+
+                    log_file = ''.join(random.choice(string.ascii_lowercase) for i in range(8))
+                    app.logger.debug("exec: %s, user: %s", execname, username)
+
+                    ip_addr = container.start(job_obj.files_dir, {
+                        "SAMPLENAME": execname,
+                        "USER": username,
+                        "LOG": log_file
+                    })
+
+                    job_obj.set_info('ip_addr', ip_addr)
+                    job_obj.save()
+
+                print(file_id)
+                container_name = f"qemu-{job_obj.uuid}"
 
             if container is not None:
                 main_logs, network_logs = container.wait_and_stop()

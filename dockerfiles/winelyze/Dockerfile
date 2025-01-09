@@ -29,9 +29,10 @@ RUN wget -nv -O- https://dl.winehq.org/wine-builds/winehq.key | APT_KEY_DONT_WAR
     && echo "deb https://dl.winehq.org/wine-builds/ubuntu/ $(grep VERSION_CODENAME= /etc/os-release | cut -d= -f2) main" >> /etc/apt/sources.list \
     && dpkg --add-architecture i386
 
-ARG WINE_BRANCH="stable=8.0.0.0~focal-1"
+# ARG WINE_BRANCH="stable=8.0.0.0~focal-1"
+ARG WINE_BRANCH="stable=8.0.2~focal-1"
 RUN apt-get update \
-    && apt-cache search winehq-stable \
+    && apt-cache search wine-stable \
     && DEBIAN_FRONTEND="noninteractive" apt-get install -y --install-recommends winehq-${WINE_BRANCH} \
     && rm -rf /var/lib/apt/lists/*
 

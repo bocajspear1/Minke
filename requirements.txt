@@ -12,3 +12,5 @@ urllib3==1.26.8
 websocket-client==1.2.3
 Werkzeug==2.0.3
 python-magic==0.4.27
+mkdocs==1.5.2
+pymdown-extensions==10.1

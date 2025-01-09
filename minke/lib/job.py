@@ -105,6 +105,12 @@ class MinkeJob():
             print(f"File {filename} not found")
             return None
         return magic.from_file(os.path.join(self.files_dir, filename), mime=True)
+    
+    def get_file_id(self, filename):
+        if filename not in self._info['files']:
+            print(f"File {filename} not found")
+            return None
+        return magic.from_file(os.path.join(self.files_dir, filename))
 
     def set_config_value(self, key, value):
         self._config[key] = value

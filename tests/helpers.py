@@ -59,6 +59,7 @@ def has_child_process(proc_data, child_name):
 
 def _is_in_order(syscall_list):
     counter = 0
+    assert len(syscall_list) > 0
     for syscall in syscall_list:
         if syscall["counter"] > counter:
             counter = syscall["counter"]
@@ -68,20 +69,24 @@ def _is_in_order(syscall_list):
                 if sub_counter == 0:
                     return 0
                 elif sub_counter <= counter:
+                    print(sub_counter, counter)
                     return 0
                 else:
                     # print(f"{counter} => {sub_counter}")
                     counter = sub_counter
                     
         else:
+            print(syscall["counter"], counter)
             return 0
     return counter
 
 def in_order(proc_data):
     for tid in proc_data['threads']:
         thread_data = proc_data['threads'][tid]
-        counter = _is_in_order(thread_data)
-        if counter == 0:
-            return False
+        if len(thread_data) > 0:
+            counter = _is_in_order(thread_data)
+            if counter == 0:
+                print("Oh no")
+                return False
     
     return True

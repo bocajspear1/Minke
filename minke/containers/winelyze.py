@@ -46,18 +46,12 @@ def process_subcalls(string_map, lib_list, child_procs, extract_files, new_subca
 
             for j in range(len(args)):
                 item = args[j]
-                is_string = False
                 if "L\"" in item:
-                    is_string = True
                     item_split = item.split("L\"", maxsplit=1)
                     args[j] = "\"" + item_split[1].strip()
                 elif "\"" in item:
-                    is_string = True
                     item_split = item.split("\"", maxsplit=1)
                     args[j] = "\"" + item_split[1].strip()
-                
-                if is_string:
-                    args[j] = args[j].replace("\\\\", "\\")
                 
 
             # Special processing for certain calls
@@ -69,15 +63,23 @@ def process_subcalls(string_map, lib_list, child_procs, extract_files, new_subca
             elif api_name in ("kernel32.createprocessw",):
                 app_path = args[0]
                 if "\\" not in app_path:
-                    cmd_line = args[1]
+                    cmd_line = args[1][1:-1]
+                    
+                    cmd_line = cmd_line.replace("\\\"", '"')
                     app_path = shlex.split(cmd_line)[0]
                 else:
                     app_path = app_path[1:-1]
 
                 app_path = app_path.split("\\")
+
                 
                 # winpath = winpath.replace("\\\\", "\\")
                 child_procs.append(app_path[-1])
+
+            # Remove double slashes
+            for j in range(len(args)):
+                if args[j].startswith("\""):
+                    args[j] = args[j].replace("\\\\", "\\")
 
 
             # Do ret processing
@@ -159,7 +161,7 @@ def process_subcalls(string_map, lib_list, child_procs, extract_files, new_subca
     return ret_calls
 
 def process_subprocess(process_name, lines):
-    pid = None
+    pid = "0"
     full_path = ""
     proc_search = process_name
     if "\\" not in process_name:
@@ -399,16 +401,3 @@ class WinelyzeContainer(BaseContainer):
 
 
         return True
-
-        
-
-        
-
-        
-        
-
-
-
-        
-
-        
