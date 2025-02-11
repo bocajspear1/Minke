@@ -3,7 +3,7 @@ from minke.lib.job import MinkeJob
 from minke.lib.screenshots import images_are_same
 
 import os
-import threading
+import json
 import shlex
 import stat
 import re
@@ -169,11 +169,9 @@ def get_process_files(process_dict, pwd=None):
                     env_split = env_item[1:-1].split("=")
                     if env_split[0] == "PWD" and pwd is None:
                         pwd = env_split[1]
-                print(pwd)
             elif sysname in ("chdir",):
                 pwd = args[0][1:-1]
             elif sysname in ('open', 'creat', 'openat', 'openat2'):
-                print(syscall)
                 full_path = ""
 
                 if sysname in ("creat", "open"):
@@ -196,7 +194,6 @@ def get_process_files(process_dict, pwd=None):
                     fd_map[int(retval)] = full_path
                     pass # TODO
             
-                print(full_path)
                 process_dict['files_to_extract'].append(full_path)
 
     for child_proc in process_dict['child_processes']:
@@ -279,7 +276,6 @@ def process_strace_calls(strace_file):
 
     # Parse objects and split up arguments
     for i in range(len(rebuilt_lines)):
-        print(rebuilt_lines[i]['raw_info'])
         if rebuilt_lines[i]['raw_info'].startswith("+++ exited"):
             exit_split = rebuilt_lines[i]['raw_info'].split(" ")
             exit_code = exit_split[3]
@@ -358,16 +354,12 @@ class QEMUBase(BaseContainer):
     def _extract_files(self, proc_data, job_obj : MinkeJob):
         for extract_file in proc_data['files_to_extract']:
             self._logger.info("Found written file %s", extract_file)
-            name = self.vars['USER']
-            drive_split = extract_file.split(":")
-            convert_path = extract_file
-            if len(drive_split) > 1:
-                convert_path = drive_split[1]
-            convert_path = convert_path.replace("\\", "/").replace("//", "/")
-            extract_path = f"/home/{name}/.wine/drive_c/{convert_path}"
-            self._logger.info("Converted to path %s", extract_path)
+
+            extract_path = f"{extract_file}"
+
             if not os.path.exists(f"{job_obj.base_dir}/extracted"):
                 os.mkdir(f"{job_obj.base_dir}/extracted")
+                
             filename = os.path.basename(extract_path)
             self.extract(extract_path, f"{job_obj.base_dir}/extracted")
             new_filename = f"{job_obj.base_dir}/extracted/{filename}"
@@ -376,6 +368,7 @@ class QEMUBase(BaseContainer):
                 job_obj.add_info('written_files', filename)
             job_obj.save()
 
+        # Extract files from child processes
         for child_proc in proc_data['child_processes']:
             self._extract_files(child_proc, job_obj)
 
@@ -388,31 +381,23 @@ class QEMUBase(BaseContainer):
 
         self.extract(f'/tmp/{log_file}', job_obj.base_dir)
 
+        self._logger.info("Processing QEMU dump...")
+        proc_list = process_strace_calls(os.path.join(job_obj.base_dir, log_file))
 
-        # self._logger.info("Processing QEMU dump...")
-        # proc_list = process_wine_calls(os.path.join(job_obj.base_dir, log_file))
-
-        # self._logger.info("Extracting files...")
-        # for proc in proc_list:
-        #     self._extract_files(proc, job_obj)
+        self._logger.info("Extracting files...")
+        for proc in proc_list:
+            self._extract_files(proc, job_obj)
         
-        # out_data = {
-        #     "operating_system": "windows",
-        #     "processes": proc_list
-        # }
+        out_data = {
+            "operating_system": "linux",
+            "processes": proc_list
+        }
 
-        # self._logger.info("Saving syscalls...")
-        # output_file = open(os.path.join(job_obj.base_dir, "syscalls_raw.json"), "w+")
-        # json.dump(out_data, output_file, indent="    ")
-        # output_file.close()
+        self._logger.info("Saving syscalls...")
 
-        # self._logger.info("Flattening syscalls...")
-
-        # flatten_process_syscalls(self._syscall_map, out_data['processes'])
-
-        # output_file = open(os.path.join(job_obj.base_dir, "syscalls_flattened.json"), "w+")
-        # json.dump(out_data, output_file, indent="    ")
-        # output_file.close()
+        output_file = open(os.path.join(job_obj.base_dir, "syscalls_flattened.json"), "w+")
+        json.dump(out_data, output_file, indent="    ")
+        output_file.close()
 
 
         return True

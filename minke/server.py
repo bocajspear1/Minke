@@ -12,7 +12,7 @@ import uuid
 import threading
 import queue
 import time
-import stat
+import docker
 import random
 import string
 import json
@@ -35,6 +35,11 @@ START_EXEC_KEY = 'start-exec'
 API_TOKEN_HEADER = 'x-api-key'
 
 class SampleThread (threading.Thread):
+    """
+    Manages processing single files at a time. The server will create these threads to process process the submitted files
+    instead of server thread. Allows a bit of scaling. The server creates the base job and passes the UUID
+    to the thread via a queue to start processing.
+    """
     def __init__(self, id, queue, config):
         threading.Thread.__init__(self)
         self._queue = queue 
@@ -44,12 +49,14 @@ class SampleThread (threading.Thread):
 
     def run(self):
         while True:
+
+            # Get our next job, blocking
             job_obj : MinkeJob = self._queue.get(block=True)
             print(job_obj.uuid)
             # job_dir = os.path.join(SAMPLE_DIR, uuid)
             # file_dir = os.path.join(job_dir, "files")
 
-            
+            # Get the submitted file to execute, since we can take multiple files
             execname = job_obj.get_config_value(START_EXEC_KEY)
             if execname is None:
                 app.logger.error("Got job with not exec-start")
@@ -140,7 +147,6 @@ class SampleThread (threading.Thread):
                     job_obj.set_info('ip_addr', ip_addr)
                     job_obj.save()
 
-                print(file_id)
                 container_name = f"qemu-{job_obj.uuid}"
 
             if container is not None:
@@ -222,6 +228,10 @@ def create_app():
 
         for i in range(THREAD_COUNT):
             app._sample_threads[i].start()
+
+        client = docker.from_env()
+
+        app.logger.info("Found Docker version %s", client.info()['ServerVersion'])
         
         app.logger.info("Server %s started", VERSION)
 
