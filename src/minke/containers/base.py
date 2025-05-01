@@ -19,6 +19,7 @@ class BaseContainer():
         self._client = docker.from_env()
         self._created = False
         self._switch = None
+        self._tcpdump_proc = None
         if logger is None:
             self._logger = logging.getLogger(f'{self._name}-logger')
         else:
@@ -74,12 +75,17 @@ class BaseContainer():
             pass
         except docker.errors.APIError:
             pass 
+        
+        if self._tcpdump_proc is not None:
+            self._tcpdump_proc.terminate()
 
         if self._switch is not None:
             self._logger.info("Removing switch %s", self._switch)
-            subprocess.check_output(["/usr/bin/sudo", "/usr/bin/ovs-vsctl", "del-br", self._switch])
+            subprocess.check_output(["/usr/bin/sudo", "/usr/local/bin/minke-remove-bridge", self._switch])
+            
         
-    def start(self, share_dir, env_vars=None):
+        
+    def start(self, job_obj, share_dir, env_vars=None):
 
         share_dir = os.path.abspath(share_dir)
 
@@ -105,11 +111,13 @@ class BaseContainer():
                 # Create private switch for analysis
                 try:
                     self._switch = f"vmbr{i}"
-                    subprocess.check_output(["/usr/bin/sudo", "/usr/bin/ovs-vsctl", "add-br", self._switch])
+                    subprocess.check_output(["/usr/bin/sudo", "/usr/local/bin/minke-create-bridge", self._switch])
                     ok = True 
                     self._logger.info("Created switch %s", self._switch)
                 except:
                     i += 1
+
+            self._tcpdump_proc = subprocess.Popen(["/usr/sbin/tcpdump", "-U", "-i", f"{self._switch}mon", "-s", "65535", "-w", f"{job_obj.base_dir}/traffic.pcap"])
 
             # Create ports4u container
             p_env = {
@@ -122,6 +130,8 @@ class BaseContainer():
             self._logger.info(f"Started container {self._ports4u_name}")
             time.sleep(5)
 
+            
+
         container = None
         if self._network:
             container = self._client.containers.create(self._image, volumes=vols, environment=environment, detach=True, name=self._name, network_mode="none", dns=["172.16.3.1"])
@@ -132,7 +142,6 @@ class BaseContainer():
         container.start()
         self._logger.info(f"Started container {self._name}")
 
-        
         ip_addr = None
         if self._network:
             try:
@@ -142,6 +151,8 @@ class BaseContainer():
 
             ip_addr = "172.16.3.4"
             subprocess.check_output(["/usr/bin/sudo", "/usr/bin/ovs-docker", "add-port", self._switch, "eth0", self._name, "--ipaddress={}".format(f'{ip_addr}/24'), "--gateway={}".format('172.16.3.1')])
+            # subprocess.check_output(["/usr/bin/sudo", "/usr/local/bin/minke-setup-mirror", self._switch])
+            
 
         return ip_addr
 

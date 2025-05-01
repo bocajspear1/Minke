@@ -10,7 +10,7 @@ import shutil
 
 import magic
 
-from .helper import file_clean
+from minke.helper import filepath_clean
 
 class MinkeJob():
 
@@ -76,6 +76,8 @@ class MinkeJob():
         if 'files' not in self._info:
             self._info['files'] = []
 
+        filename = filepath_clean(filename)
+
         self._info['files'].append(filename)
         return os.path.join(self.files_dir, filename)
 
@@ -96,17 +98,22 @@ class MinkeJob():
         self._info[key] = data
 
     def setup_file(self, filename):
-        filename = file_clean(filename)
+        filename = filepath_clean(filename)
+
         file_path = os.path.join(self.files_dir, filename)
         os.chmod(file_path, stat.S_IREAD | stat.S_IRGRP | stat.S_IROTH)
 
     def get_file_type(self, filename):
+        filename = filepath_clean(filename)
+
         if filename not in self._info['files']:
             print(f"File {filename} not found")
             return None
         return magic.from_file(os.path.join(self.files_dir, filename), mime=True)
     
     def get_file_id(self, filename):
+        filename = filepath_clean(filename)
+
         if filename not in self._info['files']:
             print(f"File {filename} not found")
             return None
@@ -117,12 +124,16 @@ class MinkeJob():
 
     def list_files(self):
         return os.listdir(self.files_dir)
+    
+    def list_dropped(self):
+        return os.listdir(self.dropped_dir)
 
     def list_logs(self):
         return os.listdir(self.logs_dir)
 
     def write_log(self, log_name, log_data):
-        log_name = file_clean(log_name)
+        log_name = filepath_clean(log_name)
+
         if not os.path.exists(self.logs_dir):
             os.mkdir(self.logs_dir)
         out_file = open(os.path.join(self.logs_dir, log_name), "w")
@@ -130,7 +141,8 @@ class MinkeJob():
         out_file.close()
 
     def get_log(self, log_name):
-        log_name = file_clean(log_name)
+        log_name = filepath_clean(log_name)
+        
         log_path = os.path.join(self.logs_dir, log_name)
         if not os.path.exists(log_path):
             return None
@@ -154,7 +166,7 @@ class MinkeJob():
         return json.loads(syscall_data)
 
     def _get_ports4u_log(self, logname, raw=False):
-        logname = file_clean(logname)
+        logname = filepath_clean(logname)
 
         net_log_dir = os.path.join(self.network_dir, "logs")
 
@@ -231,6 +243,8 @@ class MinkeJob():
         shutil.copy(start_path, os.path.join(self.screenshot_dir, f"{screenshot_count}.{extension}"))
 
     def get_screenshot(self, screenshot_name):
+        screenshot_name = filepath_clean(screenshot_name)
+
         screenshot_path = os.path.join(self.screenshot_dir, screenshot_name)
         if not os.path.exists(screenshot_path):
             return None, None
@@ -240,6 +254,30 @@ class MinkeJob():
             filetype = magic.from_buffer(screenshot_data)
             screenshot_file.close()
             return filetype, screenshot_data
+        
+    def get_screenshot_path(self, screenshot_name):
+        screenshot_name = filepath_clean(screenshot_name)
+
+        screenshot_path = os.path.abspath(os.path.join(self.screenshot_dir, screenshot_name))
+        if not os.path.exists(screenshot_path):
+            return None
+        else:
+            return screenshot_path
+        
+    def add_dropped_file(self, start_path, filename):
+        if not os.path.exists(self.dropped_dir):
+            os.mkdir(self.dropped_dir)
+        
+        shutil.copy(start_path, os.path.join(self.dropped_dir, filename))
+
+    def get_dropped_file_path(self, filename):
+        filename = filepath_clean(filename)
+
+        dropped_path = os.path.join(self.dropped_dir, filename)
+        if not os.path.exists(dropped_path):
+            return None
+        else:
+            return dropped_path
 
     @property
     def uuid(self):
@@ -272,6 +310,13 @@ class MinkeJob():
     @property
     def screenshot_dir(self):
         return os.path.join(self.base_dir, "screenshots")
+    
+    @property
+    def dropped_dir(self):
+        dropped_path = os.path.join(self.base_dir, "dropped")
+        if not os.path.exists(dropped_path):
+            os.mkdir(dropped_path)
+        return dropped_path
 
     @property
     def is_done(self):

@@ -1,6 +1,6 @@
 from minke.containers.base import BaseContainer
-from minke.lib.job import MinkeJob
-from minke.lib.screenshots import images_are_same
+from minke.job import MinkeJob
+from minke.helper import images_are_same
 
 import os
 import threading
@@ -310,6 +310,8 @@ def flatten_process_syscalls(interesting_syscalls, proc_list):
 
 class WinelyzeContainer(BaseContainer):
 
+    DOCKERFILE_DIR="winelyze"
+
     def __init__(self, name, logger=None):
         super().__init__('minke-winelyze', name, network=True, logger=logger)
         self._syscall_map = {}
@@ -318,6 +320,12 @@ class WinelyzeContainer(BaseContainer):
         my_dir = os.path.dirname(os.path.realpath(__file__))
         data_path = os.path.join(my_dir, "..", "data", "interesting_syscalls.txt")
         self._syscall_map = load_syscall_map(data_path)
+
+    def does_process(self, mimetype, file_output):
+        if mimetype in ('application/x-dosexec',) :
+            return True
+        else:
+            return False
 
     def _extract_files(self, proc_data, job_obj : MinkeJob):
         for extract_file in proc_data['files_to_extract']:
@@ -330,11 +338,11 @@ class WinelyzeContainer(BaseContainer):
             convert_path = convert_path.replace("\\", "/").replace("//", "/")
             extract_path = f"/home/{name}/.wine/drive_c/{convert_path}"
             self._logger.info("Converted to path %s", extract_path)
-            if not os.path.exists(f"{job_obj.base_dir}/extracted"):
-                os.mkdir(f"{job_obj.base_dir}/extracted")
+
             filename = os.path.basename(extract_path)
-            self.extract(extract_path, f"{job_obj.base_dir}/extracted")
-            new_filename = f"{job_obj.base_dir}/extracted/{filename}"
+            self.extract(extract_path, job_obj.dropped_dir)
+
+            new_filename = f"{job_obj.dropped_dir}/{filename}"
             if os.path.exists(new_filename):
                 os.chmod(new_filename, stat.S_IREAD | stat.S_IRGRP | stat.S_IROTH)
                 job_obj.add_info('written_files', filename)

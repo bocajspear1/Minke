@@ -3,9 +3,11 @@ import json
 import os
 import shutil
 
-from minke.lib.job import MinkeJob
+from minke.job import MinkeJob
 
 class ExtractContainer(BaseContainer):
+
+    DOCKERFILE_DIR = "extract"
 
     def __init__(self, name):
         super().__init__('minke-extract', name)

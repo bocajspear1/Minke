@@ -1,6 +1,6 @@
 from minke.containers.base import BaseContainer
-from minke.lib.job import MinkeJob
-from minke.lib.screenshots import images_are_same
+from minke.job import MinkeJob
+from minke.helper import images_are_same
 
 import os
 import json
@@ -357,12 +357,11 @@ class QEMUBase(BaseContainer):
 
             extract_path = f"{extract_file}"
 
-            if not os.path.exists(f"{job_obj.base_dir}/extracted"):
-                os.mkdir(f"{job_obj.base_dir}/extracted")
+          
                 
             filename = os.path.basename(extract_path)
-            self.extract(extract_path, f"{job_obj.base_dir}/extracted")
-            new_filename = f"{job_obj.base_dir}/extracted/{filename}"
+            self.extract(extract_path, job_obj.dropped_dir)
+            new_filename = f"{job_obj.dropped_dir}/{filename}"
             if os.path.exists(new_filename):
                 os.chmod(new_filename, stat.S_IREAD | stat.S_IRGRP | stat.S_IROTH)
                 job_obj.add_info('written_files', filename)
@@ -404,5 +403,27 @@ class QEMUBase(BaseContainer):
     
 class QEMUMIPSELContainer(QEMUBase):
 
+    DOCKERFILE_DIR = "qemu-mipsel"
+
     def __init__(self, name, logger=None):
         super().__init__('minke-qemu-mipsel', name, network=True, logger=logger)
+
+    def can_process(self, mimetype, file_id, filename):
+        if mimetype in ('application/x-executable',) and "lsb executable" in file_id and ("mips32" in file_id or ("32-bit" in file_id and "mips" in file_id)):
+            return True
+        else:
+            return False
+    
+class QEMUARMContainer(QEMUBase):
+
+    DOCKERFILE_DIR = "qemu-arm"
+
+    def __init__(self, name, logger=None):
+        super().__init__('minke-qemu-arm', name, network=True, logger=logger)
+
+    def can_process(self, mimetype, file_id, filename):
+        if mimetype in ('application/x-executable',) and "lsb executable" in file_id and "arm" in file_id and "32-bit" in file_id:
+            return True
+        else:
+            return False
+

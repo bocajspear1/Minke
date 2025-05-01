@@ -1,2 +1,3 @@
 minke ALL=(ALL) NOPASSWD: /usr/bin/ovs-docker
-minke ALL=(ALL) NOPASSWD: /usr/bin/ovs-vsctl
+minke ALL=(ALL) NOPASSWD: /usr/local/bin/minke-create-bridge
+minke ALL=(ALL) NOPASSWD: /usr/local/bin/minke-remove-bridge
