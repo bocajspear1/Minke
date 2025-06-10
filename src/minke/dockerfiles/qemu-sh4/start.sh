@@ -24,4 +24,4 @@ chmod 777 /home/${NAME}/${SAM}
 
 sleep 4
 echo "Starting sample"
-sudo -u ${NAME} /bin/bash -c "cd /home/${NAME}; strace -f -s 1024 -xx -v -tt -o /tmp/${OUT} qemu-arm -L /opt/arm-root /home/${NAME}/${SAM}"
+sudo -u ${NAME} /bin/bash -c "cd /home/${NAME}; strace -f -s 1024 -xx -v -tt -o /tmp/${OUT} qemu-sh4 -L /opt/sh4-root /home/${NAME}/${SAM}"

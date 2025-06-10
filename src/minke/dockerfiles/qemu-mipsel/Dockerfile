@@ -45,4 +45,6 @@ RUN chmod +x /usr/local/bin/qemu-mipsel
 COPY start.sh /usr/bin/start.sh
 RUN chmod +x /usr/bin/start.sh
 
+RUN mkdir /opt/samples
+
 ENTRYPOINT ["/usr/bin/start.sh"]

@@ -1,11 +1,11 @@
 [project]
 name = "Minke"
-version = "0.1.0"
+version = "0.2.1"
 description = "Dynamic malware analysis with containers"
 authors = [
     {name = "Jacob Hartman", email = "jacob@j2h2.com"},
 ]
-dependencies = ["fastapi[standard]>=0.115.8", "fastapi-offline>=1.7.3", "python-multipart>=0.0.20", "python-magic>=0.4.27", "docker>=7.1.0", "colorama>=0.4.6"]
+dependencies = ["fastapi[standard]>=0.115.8", "fastapi-offline>=1.7.3", "python-multipart>=0.0.20", "python-magic>=0.4.27", "docker>=7.1.0", "colorama>=0.4.6", "paramiko>=3.5.1"]
 requires-python = ">=3.8"
 readme = "README.md"
 license = {text = "MPL-2.0"}
@@ -17,3 +17,7 @@ build-backend = "pdm.backend"
 
 [tool.pdm]
 distribution = true
+
+[project.scripts]
+minke = 'minke.cli:main_cli'
+

@@ -91,3 +91,15 @@ def get_containers():
                 container_list.append(import_obj)
     
     return container_list
+
+def get_docker(config):
+    import docker
+
+    if 'docker_url' not in config:
+        return docker.from_env()
+
+    docker_url = config['docker_url']
+    if docker_url.startswith("ssh://"):
+        return docker.from_env(use_ssh_client=True, environment={
+            "DOCKER_HOST": docker_url
+        })

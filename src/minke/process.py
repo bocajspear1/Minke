@@ -101,7 +101,7 @@ class SampleThread (threading.Thread):
                     continue
                 self._log.info("Using %s container for sample %s", container.__name__, execname)
 
-                ip_addr = cont_inst.start(job_obj, job_obj.files_dir, {
+                ip_addr = cont_inst.start(job_obj, env_vars={
                     "SAMPLENAME": execname,
                     "USER": username,
                     "SCREENSHOT": screenshot,

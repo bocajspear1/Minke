@@ -18,11 +18,11 @@ mkdir -p /home/${NAME}
 adduser ${NAME} -h /home/${NAME} -D
 chown -R ${NAME}:${NAME} /home/${NAME}
 
-sudo -u ${NAME} /bin/bash -c "cp ${DIR}/${SAM} /home/${NAME}/${SAM}"
+sudo -u ${NAME} /bin/bash -c "cp ${DIR}/* /home/${NAME}/"
 chown -R ${NAME}:${NAME} /home/${NAME}
 chmod 777 /home/${NAME}/${SAM}
 
-sleep 2
+sleep 4
 echo "Starting sample"
 # sudo -u ${NAME} /bin/bash -c "cd /home/${NAME}; strace -f -s 1024 -x -v -tt -o /tmp/${OUT} qemu-mipsel -L /opt/mipsel-root /home/${NAME}/${SAM}"
 sudo -u ${NAME} /bin/bash -c "cd /home/${NAME}; strace -f -s 1024 -xx -v -tt -o /tmp/${OUT} qemu-mipsel -L /opt/mipsel-root /home/${NAME}/${SAM}"

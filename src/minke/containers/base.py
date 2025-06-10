@@ -1,6 +1,6 @@
 import docker
 import subprocess
-import random 
+import ipaddress 
 import string
 import logging
 import time
@@ -8,6 +8,7 @@ import tarfile
 import os
 import json
 
+from minke.job import MinkeJob
 
 class BaseContainer():
 
@@ -15,6 +16,8 @@ class BaseContainer():
         self._name = name 
         self._image = image_name
         self._ports4u_name = 'ports4u-' + self._name
+        self._netmon_name = 'netmon-' + self._name
+        self._network_name = 'net-' + self._name
         self._network = network
         self._client = docker.from_env()
         self._created = False
@@ -48,113 +51,149 @@ class BaseContainer():
 
     def _is_debug(self):
         return os.getenv("MINKE_DEBUG") is not None
+    
+
+    def _get_next_range(self):
+
+        networks = self._client.networks.list()
+
+        octet = 18
+        highest_network = ipaddress.IPv4Network("172." + str(octet) + ".0.0/24")
+        for network in networks:
+            if "IPAM" in network.attrs and "Config" in network.attrs['IPAM'] and \
+                network.attrs['IPAM']['Config'] is not None:
+
+                for net_config in network.attrs['IPAM']['Config']:
+                    ip_range = ipaddress.IPv4Network(net_config['Subnet'])
+                    if ip_range == highest_network:
+                        octet += 1
+                        highest_network = ipaddress.IPv4Network("172." + str(octet) + ".0.0/24")
+        
+        return highest_network
+    
+    def _get_network(self, network_name):
+        try:
+            return self._client.networks.get(network_name)
+        except docker.errors.NotFound:
+            return None
+        except docker.errors.APIError:
+            return None
+
+    def _remove_container(self, container_name):
+        
+        try:
+            container = self._client.containers.get(container_name)
+            container.stop()
+            if not self._is_debug():
+                self._logger.info("Removing container %s", container_name)
+                container.remove()
+        except docker.errors.NotFound:
+            self._logger.warning("Did not find container %s", container_name)
+        except docker.errors.APIError:
+            self._logger.warning("Error removing container %s", container_name)
 
     def remove(self):
-        try:
-            container = self._client.containers.get(self._name)
-            container.stop()
-            if not self._is_debug():
-                self._logger.info("Removing container %s", self._name)
-                if self._switch:
-                    subprocess.check_output(["/usr/bin/sudo", "/usr/bin/ovs-docker", "del-port", self._switch, "eth0", self._name])
-                container.remove()
-        except docker.errors.NotFound:
-            pass
-        except docker.errors.APIError:
-            pass 
 
-        try:
-            container = self._client.containers.get(self._ports4u_name)
-            container.stop()
-            if not self._is_debug():
-                self._logger.info("Removing container %s", self._ports4u_name)
-                if self._switch:
-                    subprocess.check_output(["/usr/bin/sudo", "/usr/bin/ovs-docker", "del-port", self._switch, "eth0", self._ports4u_name])
-                container.remove()
-        except docker.errors.NotFound:
-            pass
-        except docker.errors.APIError:
-            pass 
-        
-        if self._tcpdump_proc is not None:
-            self._tcpdump_proc.terminate()
+        self._remove_container(self._name)
+        self._remove_container(self._netmon_name)
+        self._remove_container(self._ports4u_name)
 
-        if self._switch is not None:
-            self._logger.info("Removing switch %s", self._switch)
-            subprocess.check_output(["/usr/bin/sudo", "/usr/local/bin/minke-remove-bridge", self._switch])
-            
-        
-        
-    def start(self, job_obj, share_dir, env_vars=None):
+        network = self._get_network(self._network_name)
+        if network is not None:
+            network.remove()
 
-        share_dir = os.path.abspath(share_dir)
+        
+    def start(self, job_obj : MinkeJob, env_vars=None):
 
         environment = {}
 
         if env_vars is not None:
             environment = env_vars
 
-        tmp_dir = '/tmp/' + ''.join(random.choice(string.ascii_lowercase) for i in range(8))
+        print(environment)
 
-        vols = {
-            share_dir: {"bind": tmp_dir, 'mode': 'ro'}
-        }
-
-        environment['TMPDIR'] = tmp_dir
+        environment['TMPDIR'] = "/opt/samples"
 
         self.vars = environment
 
+        network_mode = "none"
+        analysis_ip = None
+
         if self._network:
-            i = 0
-            ok = False 
-            while not ok:
-                # Create private switch for analysis
-                try:
-                    self._switch = f"vmbr{i}"
-                    subprocess.check_output(["/usr/bin/sudo", "/usr/local/bin/minke-create-bridge", self._switch])
-                    ok = True 
-                    self._logger.info("Created switch %s", self._switch)
-                except:
-                    i += 1
+            # Create network for analysis
 
-            self._tcpdump_proc = subprocess.Popen(["/usr/sbin/tcpdump", "-U", "-i", f"{self._switch}mon", "-s", "65535", "-w", f"{job_obj.base_dir}/traffic.pcap"])
+            open_subnet = self._get_next_range()
 
-            # Create ports4u container
+            host_list = list(open_subnet.hosts())
+            gateway_ip = str(host_list[0])
+            analysis_ip = str(host_list[8])
+            fake_gateway_addr = str(host_list[-1])
+
+            ipam_pool = docker.types.IPAMPool(
+                subnet=str(open_subnet),
+                gateway=fake_gateway_addr,
+            )
+
+            ipam_config = docker.types.IPAMConfig(pool_configs=[ipam_pool])
+
+            network = self._client.networks.create(self._network_name, driver="bridge", internal=True, options={
+                "com.docker.network.bridge.inhibit_ipv4": "true",
+                "com.docker.network.bridge.enable_ip_masquerade": "false"
+            }, ipam=ipam_config)
+
+            # Create the Ports4U container. This container needs extra capabilities to do traffic sniffing and iptables stuff
+            # It also serves as the analysis gateway
             p_env = {
-                "SLEEP_BEFORE": 5
+                "SLEEP_BEFORE": 2
             }
-            p_container = self._client.containers.create('ports4u', environment=p_env, detach=True, name=self._ports4u_name, network_mode="none", cap_add=["NET_ADMIN", "NET_RAW"])
-            p_container.start()
-            subprocess.check_output(["/usr/bin/sudo", "/usr/bin/ovs-docker", "add-port", self._switch, "eth0", self._ports4u_name, "--ipaddress={}".format('172.16.3.1/24')])
-            
-            self._logger.info(f"Started container {self._ports4u_name}")
-            time.sleep(5)
 
-            
+            ports4u = self._client.containers.create("ports4u", environment=p_env, detach=True, name=self._ports4u_name, network=self._network_name, networking_config={
+                self._network_name: self._client.api.create_endpoint_config(
+                    ipv4_address=gateway_ip
+                )}, cap_add=["NET_ADMIN", "NET_RAW"])
 
-        container = None
-        if self._network:
-            container = self._client.containers.create(self._image, volumes=vols, environment=environment, detach=True, name=self._name, network_mode="none", dns=["172.16.3.1"])
-        else:
-            container = self._client.containers.create(self._image, volumes=vols, environment=environment, detach=True, name=self._name, network_mode="none")
+            ports4u.start()
+            self._logger.info(f"Started ports4u container {self._ports4u_name}")
 
+            # Create the netmon container.  This container needs extra capabilities to do traffic sniffing and network configuration
+            # The network used by the analysis container actually attaches to this container's networking namespace.
+            # This avoids giving the analysis container extra capabilities. 
+
+            networking = self._client.containers.create("minke-netmon", detach=True, name=self._netmon_name, network=self._network_name, 
+                                                        environment={"GATEWAY": gateway_ip}, dns=[str(gateway_ip)], networking_config={
+                self._network_name: self._client.api.create_endpoint_config(
+                    ipv4_address=analysis_ip
+                )}, cap_add=["NET_ADMIN", "NET_RAW"])
+            networking.start()
+            self._logger.info(f"Started netmon container {self._netmon_name}")
+
+            network_mode = "container:" + self._netmon_name
+
+            time.sleep(2)
+
+        # Create our container
+        container = self._client.containers.create(self._image, environment=environment, detach=True, name=self._name, network_mode=network_mode)
         self._created = True
+
+        # Copy in our sample files
+        archive_path = f"/tmp/{job_obj.uuid}-samples.tar"
+        with tarfile.open(archive_path, "w") as tar:
+            sample_files = job_obj.list_files()
+            for name in sample_files:
+                full_path = os.path.join(job_obj.files_dir, name)
+                tar.add(full_path, arcname=name)
+
+        with open(archive_path, "rb") as tar:
+            container.put_archive("/opt/samples", tar.read())
+
+        time.sleep(1)
+        os.unlink(archive_path)
+
+        # Start the container
         container.start()
         self._logger.info(f"Started container {self._name}")
 
-        ip_addr = None
-        if self._network:
-            try:
-                subprocess.check_output(["/usr/bin/sudo", "/usr/bin/ovs-docker", "del-ports", self._switch, self._name], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-            except:
-                pass
-
-            ip_addr = "172.16.3.4"
-            subprocess.check_output(["/usr/bin/sudo", "/usr/bin/ovs-docker", "add-port", self._switch, "eth0", self._name, "--ipaddress={}".format(f'{ip_addr}/24'), "--gateway={}".format('172.16.3.1')])
-            # subprocess.check_output(["/usr/bin/sudo", "/usr/local/bin/minke-setup-mirror", self._switch])
-            
-
-        return ip_addr
+        return analysis_ip
 
     def wait_and_stop(self):
         i = 0
@@ -183,40 +222,41 @@ class BaseContainer():
 
 
         return main_docker_logs, network_docker_logs
+    
+    def _extract_tar(self, container_name, container_path, tar_path, out_path):
+        container = self._client.containers.get(container_name)
 
-    def extract(self, cont_path, out_path):
-        container = self._client.containers.get(self._name)
         try:
-            strm, stat = container.get_archive(cont_path)
-            results = open("/tmp/extract-data.tar", "wb")
+            strm, stat = container.get_archive(container_path)
+            results = open(tar_path, "wb")
             for chunk in strm:
                 results.write(chunk)
             results.close()
 
-            results_tar = tarfile.open("/tmp/extract-data.tar", "r")
+            results_tar = tarfile.open(tar_path, "r")
             results_tar.extractall(path=out_path)
             results_tar.close()
 
-            os.remove("/tmp/extract-data.tar")
+            os.remove(tar_path)
         except docker.errors.NotFound:
-            self._logger.info("Could not find file %s", cont_path)
+            self._logger.info("Could not find path %s", container_path)
+
+    def extract(self, container_path, out_path):
+        
+        tar_path = f"/tmp/extract-{self._name}.tar"
+        self._extract_tar(self._name, container_path, tar_path, out_path)
+        
 
     def process_network(self, job_obj):
+        
         if self._network:
-            tar_file = "/tmp/extract-network.tar"
-            container = self._client.containers.get(self._ports4u_name)
-            try:
-                strm, stat = container.get_archive("/opt/ports4u/logs")
-                results = open(tar_file, "wb")
-                for chunk in strm:
-                    results.write(chunk)
-                results.close()
 
-                results_tar = tarfile.open(tar_file, "r")
-                results_tar.extractall(path=os.path.join(job_obj.base_dir, "network"))
-                results_tar.close()
-            except docker.errors.NotFound:
-                pass
+            tar_path = f"/tmp/network-{self._name}.tar"
+            self._extract_tar(self._ports4u_name, "/opt/ports4u/logs", tar_path, os.path.join(job_obj.base_dir, "network"))
+
+            tar_path = f"/tmp/pcap-{self._name}.tar"
+            self._extract_tar(self._netmon_name, "/opt/out/traffic.pcap", tar_path, os.path.join(job_obj.base_dir, "network"))
+
 
     def process(self, job_dir):
         raise NotImplementedError

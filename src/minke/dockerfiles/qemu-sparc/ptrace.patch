@@ -1,0 +1,22 @@
+--- linux-user/syscall.c.orig   2024-12-03 19:31:12.698898898 -0500
++++ linux-user/syscall.c        2024-12-03 19:32:28.196081660 -0500
+@@ -144,6 +144,8 @@
+ #include "fd-trans.h"
+ #include "cpu_loop-common.h"
+ 
++#include <sys/ptrace.h>
++
+ #ifndef CLONE_IO
+ #define CLONE_IO                0x80000000      /* Clone io context */
+ #endif
+@@ -9462,6 +9464,10 @@
+         return do_execv(cpu_env, arg1, arg2, arg3, arg4, arg5, true);
+     case TARGET_NR_execve:
+         return do_execv(cpu_env, AT_FDCWD, arg1, arg2, arg3, 0, false);
++    case TARGET_NR_ptrace: {
++        ptrace(PTRACE_TRACEME, 0, 0, 0);
++        return 0;
++    }
+     case TARGET_NR_chdir:
+         if (!(p = lock_user_string(arg1)))
+             return -TARGET_EFAULT;

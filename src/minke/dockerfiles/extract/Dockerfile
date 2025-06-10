@@ -6,4 +6,6 @@ COPY run.sh /opt/run.sh
 
 RUN chmod +x /opt/run.sh
 
+RUN mkdir /opt/samples
+
 ENTRYPOINT ["/opt/run.sh"]

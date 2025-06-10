@@ -30,7 +30,7 @@ RUN wget -nv -O- https://dl.winehq.org/wine-builds/winehq.key | APT_KEY_DONT_WAR
     && dpkg --add-architecture i386
 
 # ARG WINE_BRANCH="stable=8.0.0.0~focal-1"
-ARG WINE_BRANCH="stable=8.0.2~focal-1"
+ARG WINE_BRANCH="stable=10.0.0.0~focal-1"
 RUN apt-get update \
     && apt-cache search wine-stable \
     && DEBIAN_FRONTEND="noninteractive" apt-get install -y --install-recommends winehq-${WINE_BRANCH} \
@@ -43,11 +43,11 @@ ENV LANG en_US.UTF-8
 RUN apt-get update \
     && DEBIAN_FRONTEND="noninteractive" apt-get install -y --no-install-recommends x11-apps coreutils
 
-ARG GECKO_VER="2.47.3"
+ARG GECKO_VER="2.47.4"
 RUN mkdir -p /usr/share/wine/gecko
 RUN wget -nv -O /usr/share/wine/gecko/wine-gecko-${GECKO_VER}-x86.msi http://dl.winehq.org/wine/wine-gecko/${GECKO_VER}/wine-gecko-${GECKO_VER}-x86.msi
 RUN wget -nv -O /usr/share/wine/gecko/wine-gecko-${GECKO_VER}-x86_64.msi http://dl.winehq.org/wine/wine-gecko/${GECKO_VER}/wine-gecko-${GECKO_VER}-x86_64.msi
-ARG MONO_VER="7.4.0"
+ARG MONO_VER="9.4.0"
 RUN mkdir -p /usr/share/wine/mono
 RUN wget -nv -O /usr/share/wine/mono/wine-mono-${MONO_VER}-x86.msi http://dl.winehq.org/wine/wine-mono/${MONO_VER}/wine-mono-${MONO_VER}-x86.msi
 
@@ -62,4 +62,7 @@ RUN chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}
 RUN bash -c 'nohup /usr/bin/Xvfb :0 -screen 0 1024x768x8 &' && sudo --user ${USERNAME} bash -c 'DISPLAY=:0.0 wine hostname' && pkill Xvfb
 RUN if [ -f "/tmp/.X0-lock" ]; then rm /tmp/.X0-lock; fi
 RUN chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.wine/
+
+RUN mkdir /opt/samples
+
 ENTRYPOINT ["/usr/bin/start.sh"]

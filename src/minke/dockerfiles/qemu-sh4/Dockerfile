@@ -1,10 +1,10 @@
 FROM debian:bullseye-slim AS basebuild
 RUN apt-get -qq update \
-&& apt-get -q install --assume-yes debootstrap fakechroot fakeroot
-ARG MIRROR=http://deb.debian.org/debian
-ARG SUITE=bullseye
+&& apt-get -q install --assume-yes debootstrap fakechroot fakeroot debian-ports-archive-keyring
+ARG MIRROR=http://ftp.ports.debian.org/debian-ports/
+ARG SUITE=sid
 RUN mkdir /work
-RUN fakeroot fakechroot debootstrap --foreign --variant=minbase --arch=armel "$SUITE" /work "$MIRROR"
+RUN fakeroot fakechroot debootstrap --keyring=/usr/share/keyrings/debian-ports-archive-keyring.gpg --foreign --variant=minbase --arch=sh4 "$SUITE" /work "$MIRROR"
 RUN tar -czf rootfs.tar.gz /work 
 
 FROM alpine:latest as qemubuild
@@ -26,7 +26,7 @@ RUN patch -u -b ./qemu-${QEMU_VER}/linux-user/syscall.c -i /opt/ptrace.patch
 WORKDIR /opt/qemu-${QEMU_VER}
 
 RUN mkdir /out
-RUN ./configure --target-list=arm-linux-user --static --disable-system --enable-linux-user
+RUN ./configure --target-list=sh4-linux-user --static --disable-system --enable-linux-user
 RUN make -j 2 && make install
 
 FROM alpine:latest
@@ -37,10 +37,10 @@ WORKDIR /opt
 RUN apk add -U sudo bash strace
 
 COPY --from=basebuild rootfs.tar.gz /opt/rootfs.tar.gz
-RUN tar -zxf rootfs.tar.gz && mv work arm-root && rm rootfs.tar.gz
+RUN tar -zxf rootfs.tar.gz && mv work sh4-root && rm rootfs.tar.gz
 
-COPY --from=qemubuild /usr/local/bin/qemu-arm /usr/local/bin/qemu-arm
-RUN chmod +x /usr/local/bin/qemu-arm
+COPY --from=qemubuild /usr/local/bin/qemu-sh4 /usr/local/bin/qemu-sh4
+RUN chmod +x /usr/local/bin/qemu-sh4
 
 COPY start.sh /usr/bin/start.sh
 RUN chmod +x /usr/bin/start.sh
