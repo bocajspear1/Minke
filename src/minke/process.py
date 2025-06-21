@@ -12,6 +12,8 @@ from minke.containers.winelyze import WinelyzeContainer
 from minke.containers.qemu import QEMUMIPSELContainer
 from minke.containers.extract import ExtractContainer
 
+from minke.helper import get_docker
+
 class SampleThread (threading.Thread):
     """
     Manages processing single submissions at a time. The server will create these threads to process process the submitted files
@@ -24,21 +26,21 @@ class SampleThread (threading.Thread):
         self._id = id
         self.daemon = True
         self._config = config
-        self._log = logging.getLogger(f"SampleThread{self._id}")
+        self._client = get_docker(self._config)
+        self._logger = logging.getLogger(f"SampleThread{self._id}")
 
     def run(self):
         while True:
 
             # Get our next job, blocking
             job_obj : MinkeJob = self._queue.get(block=True)
-            print(job_obj.uuid)
             # job_dir = os.path.join(SAMPLE_DIR, uuid)
             # file_dir = os.path.join(job_dir, "files")
 
             # Get the submitted file to execute, since we can take multiple files
             execname = job_obj.get_config_value(START_EXEC_KEY)
             if execname is None:
-                self._log.error("Got job with not exec-start")
+                self._logger.error("Got job with not exec-start")
                 continue
 
             sample_files = job_obj.list_files()
@@ -48,8 +50,8 @@ class SampleThread (threading.Thread):
             for file_item in sample_files:
                 if job_obj.get_file_type(file_item) in ('application/zip',):
                     compressed = True
-                    self._log.info("Detected compressed file %s, extracting...", file_item)
-                    extract_cont = ExtractContainer("extract-" + job_obj.uuid)
+                    self._logger.info("Detected compressed file %s, extracting...", file_item)
+                    extract_cont = ExtractContainer(self._client, "extract-" + job_obj.uuid)
                     extract_cont.start(job_obj, job_obj.files_dir, {
                         "EXECSAMPLE": execname
                     })
@@ -62,10 +64,10 @@ class SampleThread (threading.Thread):
                 new_sample_files.remove(execname)
 
                 if len(new_sample_files) > 1:
-                    self._log.error("Multiple files, but no execname set. Cannot continue")
+                    self._logger.error("Multiple files, but no execname set. Cannot continue")
                     continue
                 elif len(new_sample_files) == 0:
-                    self._log.error("Failed to extract files. Cannot continue")
+                    self._logger.error("Failed to extract files. Cannot continue")
                     continue
                 else:
                     execname = new_sample_files[0]
@@ -80,12 +82,12 @@ class SampleThread (threading.Thread):
 
             screenshot = ''.join(random.choice(string.ascii_lowercase) for i in range(6))
             log_file = ''.join(random.choice(string.ascii_lowercase) for i in range(8))
-            self._log.debug("exec: %s, user: %s", execname, username)
+            self._logger.debug("exec: %s, user: %s", execname, username)
 
             container = None
             container_name = ""
 
-            print(exec_type)
+            self._logger.debug("Exec type %s", exec_type)
 
             container_list = get_containers()
 
@@ -95,11 +97,11 @@ class SampleThread (threading.Thread):
                 if not hasattr(container, "can_process"):
                     continue
                 container_name = f"{container.DOCKERFILE_DIR}-{job_obj.uuid}"
-                cont_inst = container(container_name, logger=self._log)
+                cont_inst = container(self._client, container_name, logger=self._logger)
                 can_process = cont_inst.can_process(exec_type, file_id, execname)
                 if not can_process:
                     continue
-                self._log.info("Using %s container for sample %s", container.__name__, execname)
+                self._logger.info("Using %s container for sample %s", container.__name__, execname)
 
                 ip_addr = cont_inst.start(job_obj, env_vars={
                     "SAMPLENAME": execname,
@@ -122,12 +124,12 @@ class SampleThread (threading.Thread):
                     job_obj.write_log(f"ports4u-container.log", network_logs)
                 cont_inst.process(job_obj)
                 cont_inst.process_network(job_obj)
-                self._log.info("Analysis %s completed", job_obj.uuid)
+                self._logger.info("Analysis %s completed", job_obj.uuid)
                 job_obj.set_info('complete', True)
                 job_obj.set_info('end_time', time.time())
                 job_obj.save()
                 del cont_inst
             else:
-                self._log.error("No analysis container found")
+                self._logger.error("No analysis container found")
 
             time.sleep(.5)

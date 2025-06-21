@@ -1,6 +1,6 @@
 FROM alpine:3.20
 
-RUN apk add -U tcpdump libcap-setcap iproute2 sudo
+RUN apk add -U tcpdump libcap-setcap iproute2 sudo iptables
 
 RUN adduser -D -H netmon && mkdir /opt/out && chown netmon:netmon /opt/out
 

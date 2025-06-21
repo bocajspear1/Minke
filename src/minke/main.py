@@ -7,14 +7,15 @@ import os
 from fastapi_offline import FastAPIOffline
 from fastapi import File, Form, UploadFile, HTTPException, Request, Depends, Security, APIRouter
 from fastapi.security import APIKeyHeader
-import docker
 
 from minke.process import SampleThread
 from minke.api import v1_router
+from minke.helper import get_docker, get_logging_config
 
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)-8s | "
-                           "%(module)s:%(funcName)s:%(lineno)d - %(message)s")
+
+# logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)-8s | "
+#                            "%(module)s:%(funcName)s:%(lineno)d - %(message)s")
 
 from minke.vars import *
 
@@ -45,6 +46,8 @@ def create_app():
     config_data = json.loads(config_file.read())
     config_file.close()
 
+    logging.config.dictConfig(get_logging_config(config_data))
+
     app = FastAPIOffline(
         title="Minke Malware Dynamic Analysis Server",
         version=VERSION,
@@ -70,7 +73,7 @@ def create_app():
     for i in range(THREAD_COUNT):
         app._sample_threads[i].start()
 
-    client = docker.from_env()
+    client = get_docker(config_data)
 
     app.logger.info("Found Docker version %s", client.info()['ServerVersion'])
     

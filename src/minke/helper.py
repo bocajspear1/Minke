@@ -18,34 +18,78 @@ def save_config(config_path, config_data):
     with open(config_path, "w") as config_out:
         config_out.write(json.dumps(config_data, indent=4))
 
-LOGGING_CONFIG = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "formatters": {
-        "custom": {
-            "()": "uvicorn.logging.DefaultFormatter",
-            "format": "=>\t{levelprefix} {message} \t {filename}-{lineno}:[{asctime}]",
-            "datefmt": "%d %H:%M:%S",
-            "style": "{",
-            "use_colors": True,
+
+def get_logging_config(config):
+
+    log_level = config['log_level'].upper()
+    format_str = "%(asctime)s | %(levelname)-8s | %(name)s - %(message)s"
+    if log_level == "DEBUG":
+        format_str = "%(asctime)s | %(levelname)-8s | %(name)s:%(module)s:%(funcName)s:%(lineno)d - %(message)s"
+    return {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "custom": {
+                "format": format_str,
+                "datefmt": "%Y-%m-%d %H:%M:%S",
+                # "style": "{",
+                "use_colors": True,
+            },
+            "custom-file": {
+                "format": format_str,
+                "datefmt": "%Y-%m-%d %H:%M:%S",
+                # "style": "{",
+                "use_colors": False,
+            },
+            'access': {
+                '()': 'uvicorn.logging.AccessFormatter',
+                'fmt': '%(levelprefix)s %(client_addr)s - "%(request_line)s" %(status_code)s',
+                "use_colors": False,
+            }
         },
-    },
-    "handlers": {
-        "console": {
-            "level": "DEBUG",
-            "formatter": "custom",
-            "class": "logging.StreamHandler",
-            "stream": "ext://sys.stdout",  # Default is stderr
+        "handlers": {
+            "console": {
+                "level": log_level,
+                "formatter": "custom",
+                "class": "logging.StreamHandler",
+                "stream": "ext://sys.stderr",  # Default is stderr
+            },
+            "file": {
+                "level": log_level,
+                "formatter": "custom-file",
+                "class": "logging.handlers.RotatingFileHandler",
+                "filename": os.path.join(config['log_dir'], "minke.log"), 
+            },
+            "file-access": {
+                "level": log_level,
+                "formatter": "access",
+                "class": "logging.handlers.RotatingFileHandler",
+                "filename": os.path.join(config['log_dir'], "minke-access.log"), 
+            },
         },
-    },
-    "loggers": {
-        "logger": {
-            "handlers": ["console"],
-            "level": "DEBUG",
+        "loggers": {
+            "uvicorn": {
+                "handlers": ["console", "file"],
+                "level": log_level,
+                "propagate": False,
+            },
+            "uvicorn.access": {
+                "handlers": ["console", "file-access"],
+                "level": log_level,
+                "propagate": False,
+            },
+            "urllib3.connectionpool": { # Noisy, so we suppress
+                "handlers": ["console"],
+                "level": "INFO",
+                "propagate": False,
+            },
+        },
+        "root": {
+            "handlers": ["console", "file"],
+            "level": log_level,
             "propagate": False,
-        },
-    },
-}
+        }
+    }
 
 
 def filepath_clean(file_path):
@@ -95,11 +139,23 @@ def get_containers():
 def get_docker(config):
     import docker
 
-    if 'docker_url' not in config:
-        return docker.from_env()
+    ret_docker = None
 
-    docker_url = config['docker_url']
-    if docker_url.startswith("ssh://"):
-        return docker.from_env(use_ssh_client=True, environment={
-            "DOCKER_HOST": docker_url
-        })
+    if 'docker_url' not in config:
+        ret_docker = docker.from_env()
+    else:
+        docker_url = config['docker_url']
+        if docker_url.startswith("ssh://"):
+            ret_docker = docker.from_env(use_ssh_client=True, environment={
+                "DOCKER_HOST": docker_url
+            })
+        else:
+            ret_docker = docker.from_env(environment={
+                "DOCKER_HOST": docker_url
+            })
+
+    docker_info = ret_docker.info()
+    if "name=userns" not in docker_info['SecurityOptions']:
+        raise ValueError("Minke will not run unless user namespaces are enabled!")
+
+    return ret_docker

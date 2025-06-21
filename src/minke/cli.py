@@ -8,7 +8,7 @@ import random
 import string
 import subprocess
 
-from minke.helper import load_config, get_containers, get_docker
+from minke.helper import load_config, get_containers, get_docker, get_logging_config
 from minke.vars import *
 
 
@@ -38,54 +38,15 @@ def run_group():
 @click.pass_obj
 def web_cmd(ctx, port, addr, debug):
     if debug is True:
-        ctx.config['loglevel'] = 'debug'
+        ctx.config['log_level'] = 'debug'
+
+    logging_config = get_logging_config(ctx.config)
     try:
         import uvicorn
         from minke.main import app
-        uvicorn.run(app, host=addr, port=port)
+        uvicorn.run(app, host=addr, port=port, log_config=logging_config)
     except KeyboardInterrupt:
         print("Stopping...")
-
-
-@run_group.command('install')
-@click.pass_obj
-def install_cmd(ctx):
-    if os.geteuid() != 0:
-        print(f"{Fore.RED}Run install command as root{Style.RESET_ALL}")
-        return 1
-    
-    minke_user = input("What user will Minke run as?> ")
-    
-    print(f"{Fore.BLUE}Setting up scripts{Style.RESET_ALL}")
-    data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-    if not os.path.exists("/usr/local/bin/minke-create-bridge"):
-        print(f"{Fore.BLUE}Installing minke-create-bridge{Style.RESET_ALL}")
-        shutil.copy(os.path.join(data_dir, "minke-create-bridge"), "/usr/local/bin/minke-create-bridge")
-        os.chmod("/usr/local/bin/minke-create-bridge", 0o554)
-    else:
-        print(f"{Fore.GREEN}minke-create-bridge already exists{Style.RESET_ALL}")
-
-    if not os.path.exists("/usr/local/bin/minke-remove-bridge"):
-        print(f"{Fore.BLUE}Installing minke-remove-bridge{Style.RESET_ALL}")
-        shutil.copy(os.path.join(data_dir, "minke-remove-bridge"), "/usr/local/bin/minke-remove-bridge")
-        os.chmod("/usr/local/bin/minke-remove-bridge", 0o554)
-    else:
-        print(f"{Fore.GREEN}minke-remove-bridge already exists{Style.RESET_ALL}")
-
-    if not os.path.exists("/etc/sudoers.d/minke-sudoers"):
-        print(f"{Fore.BLUE}Installing sudoers file{Style.RESET_ALL}")
-        with open(os.path.join(data_dir, "minke-sudoers"), "r") as sudoers_file:
-            sudoers_data = sudoers_file.read()
-            sudoers_data = sudoers_data.replace("minke ", f"{minke_user} ")
-            with open("/etc/sudoers.d/minke-sudoers", "w+") as out_file:
-                out_file.write(sudoers_data)
-                out_file.write("\n")
-        os.chmod("/etc/sudoers.d/minke-sudoers", 0o640)
-    else:
-        print(f"{Fore.GREEN}sudoers file already exists{Style.RESET_ALL}")
-
-    print(f"{Fore.BLUE}Setting up tcpdump{Style.RESET_ALL}")
-    subprocess.run("setcap cap_net_raw,cap_net_admin=eip /usr/sbin/tcpdump", shell=True)
     
 
 @main_cli.group('submissions')
@@ -111,6 +72,15 @@ def clean_cmd(ctx, force):
 @click.pass_context
 def containers_group(ctx):
     ctx.config = load_config("./config.json")
+
+@containers_group.command('info')
+@click.pass_obj
+def info_cmd(ctx):
+    docker_inst = get_docker(ctx.config)
+
+    docker_info = docker_inst.info()
+    from pprint import pprint
+    pprint(docker_info)
 
 @containers_group.command('list')
 @click.pass_obj
@@ -149,9 +119,18 @@ def build_cmd(ctx):
         print(f"{Fore.BLUE}Building {container.DOCKERFILE_DIR} image...{Style.RESET_ALL}")
         dockerfile_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dockerfiles", container.DOCKERFILE_DIR)
         
-        image, build_logs = docker_inst.images.build(path=dockerfile_path, tag=image_name, buildargs={
-            "USERNAME": username
-        })
+        from docker.errors import BuildError
+
+        try:
+            image, build_logs = docker_inst.images.build(path=dockerfile_path, tag=image_name, buildargs={
+                "USERNAME": username
+            })
+        except BuildError as e:
+            print("Build failed with:")
+            print(e)
+            for line in e.build_log:
+                print(line)
+            return 2
 
 
 @containers_group.command('rebuild')

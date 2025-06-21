@@ -1,7 +1,6 @@
 {
     "access_key": "thisisakey",
     "max_concurrent": 2,
-    "flask_key": "14fdf221e7de1c7510aba934e3159f2cc4057893",
     "username": "default",
     "docker_url": "unix://var/run/docker.sock"
 }

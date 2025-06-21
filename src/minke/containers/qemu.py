@@ -348,8 +348,8 @@ def process_strace_calls(strace_file):
 
 class QEMUBase(BaseContainer):
 
-    def __init__(self, container_name, name, network=True, logger=None):
-        super().__init__(container_name, name, network=network, logger=logger)
+    def __init__(self, client, container_name, name, network=True, logger=None):
+        super().__init__(client, container_name, name, network=network, logger=logger)
         self._syscall_map = {}
         self._string_map = {}
 
@@ -411,8 +411,8 @@ class QEMUMIPSELContainer(QEMUBase):
 
     DOCKERFILE_DIR = "qemu-mipsel"
 
-    def __init__(self, name, logger=None):
-        super().__init__('minke-qemu-mipsel', name, network=True, logger=logger)
+    def __init__(self, client, name, logger=None):
+        super().__init__(client, 'minke-qemu-mipsel', name, network=True, logger=logger)
 
     def can_process(self, mimetype, file_id, filename):
         if mimetype in ('application/x-executable',) and "lsb executable" in file_id and ("mips32" in file_id or ("32-bit" in file_id and "mips" in file_id)):
@@ -424,8 +424,8 @@ class QEMUARMContainer(QEMUBase):
 
     DOCKERFILE_DIR = "qemu-arm"
 
-    def __init__(self, name, logger=None):
-        super().__init__('minke-qemu-arm', name, network=True, logger=logger)
+    def __init__(self, client, name, logger=None):
+        super().__init__(client, 'minke-qemu-arm', name, network=True, logger=logger)
 
     def can_process(self, mimetype, file_id, filename):
         if mimetype in ('application/x-executable',) and "lsb executable" in file_id and "arm" in file_id and "32-bit" in file_id:
@@ -438,8 +438,8 @@ class QEMUAARCH64Container(QEMUBase):
 
     DOCKERFILE_DIR = "qemu-aarch64"
 
-    def __init__(self, name, logger=None):
-        super().__init__('minke-qemu-aarch64', name, network=True, logger=logger)
+    def __init__(self, client, name, logger=None):
+        super().__init__(client, 'minke-qemu-aarch64', name, network=True, logger=logger)
 
     def can_process(self, mimetype, file_id, filename):
         if mimetype in ('application/x-executable',) and "lsb executable" in file_id and "aarch64" in file_id and "64-bit" in file_id:
@@ -452,8 +452,8 @@ class QEMUPowerPCContainer(QEMUBase):
 
     DOCKERFILE_DIR = "qemu-powerpc"
 
-    def __init__(self, name, logger=None):
-        super().__init__('minke-qemu-powerpc', name, network=True, logger=logger)
+    def __init__(self, client, name, logger=None):
+        super().__init__(client, 'minke-qemu-powerpc', name, network=True, logger=logger)
 
     def can_process(self, mimetype, file_id, filename):
         if mimetype in ('application/x-executable',) and "msb executable" in file_id and "powerpc" in file_id and "32-bit" in file_id:
@@ -465,8 +465,8 @@ class QEMUSPARCContainer(QEMUBase):
 
     DOCKERFILE_DIR = "qemu-sparc"
 
-    def __init__(self, name, logger=None):
-        super().__init__('minke-qemu-sparc', name, network=True, logger=logger)
+    def __init__(self, client, name, logger=None):
+        super().__init__(client, 'minke-qemu-sparc', name, network=True, logger=logger)
 
     def can_process(self, mimetype, file_id, filename):
         if mimetype in ('application/x-executable',) and "msb executable" in file_id and "sparc" in file_id and "32-bit" in file_id:
@@ -478,11 +478,50 @@ class QEMUSH4Container(QEMUBase):
 
     DOCKERFILE_DIR = "qemu-sh4"
 
-    def __init__(self, name, logger=None):
-        super().__init__('minke-qemu-sh4', name, network=True, logger=logger)
+    def __init__(self, client, name, logger=None):
+        super().__init__(client, 'minke-qemu-sh4', name, network=True, logger=logger)
 
     def can_process(self, mimetype, file_id, filename):
         if mimetype in ('application/x-executable',) and "lsb executable" in file_id and "renesas sh" in file_id and "32-bit" in file_id:
+            return True
+        else:
+            return False
+
+class QEMUi386Container(QEMUBase):
+
+    DOCKERFILE_DIR = "qemu-i386"
+
+    def __init__(self, client, name, logger=None):
+        super().__init__(client, 'minke-qemu-i386', name, network=True, logger=logger)
+
+    def can_process(self, mimetype, file_id, filename):
+        if mimetype in ('application/x-executable',) and "lsb executable" in file_id and "intel" in file_id and "32-bit" in file_id:
+            return True
+        else:
+            return False
+
+class QEMUx8664Container(QEMUBase):
+
+    DOCKERFILE_DIR = "qemu-x86_64"
+
+    def __init__(self, client, name, logger=None):
+        super().__init__(client, 'minke-qemu-x86_64', name, network=True, logger=logger)
+
+    def can_process(self, mimetype, file_id, filename):
+        if mimetype in ('application/x-executable',) and "lsb" in file_id and "x86-64" in file_id and "64-bit" in file_id:
+            return True
+        else:
+            return False
+        
+class QEMUs390xContainer(QEMUBase):
+
+    DOCKERFILE_DIR = "qemu-s390x"
+
+    def __init__(self, client, name, logger=None):
+        super().__init__(client, 'minke-qemu-s390x', name, network=True, logger=logger)
+
+    def can_process(self, mimetype, file_id, filename):
+        if mimetype in ('application/x-executable',) and "msb" in file_id and "ibm s/390" in file_id and "64-bit" in file_id:
             return True
         else:
             return False

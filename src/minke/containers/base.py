@@ -12,14 +12,14 @@ from minke.job import MinkeJob
 
 class BaseContainer():
 
-    def __init__(self, image_name, name, network=False, logger=None):
+    def __init__(self, client, image_name, name, network=False, logger=None):
         self._name = name 
         self._image = image_name
         self._ports4u_name = 'ports4u-' + self._name
         self._netmon_name = 'netmon-' + self._name
         self._network_name = 'net-' + self._name
         self._network = network
-        self._client = docker.from_env()
+        self._client = client
         self._created = False
         self._switch = None
         self._tcpdump_proc = None
@@ -110,7 +110,7 @@ class BaseContainer():
         if env_vars is not None:
             environment = env_vars
 
-        print(environment)
+        self._logger.debug("Environment = %s", str(environment))
 
         environment['TMPDIR'] = "/opt/samples"
 
@@ -138,7 +138,8 @@ class BaseContainer():
 
             network = self._client.networks.create(self._network_name, driver="bridge", internal=True, options={
                 "com.docker.network.bridge.inhibit_ipv4": "true",
-                "com.docker.network.bridge.enable_ip_masquerade": "false"
+                "com.docker.network.bridge.enable_ip_masquerade": "false",
+                # "com.docker.network.bridge.gateway_mode_ipv4": "isolated"
             }, ipam=ipam_config)
 
             # Create the Ports4U container. This container needs extra capabilities to do traffic sniffing and iptables stuff
@@ -208,7 +209,7 @@ class BaseContainer():
                 i += 1
 
         if not done:
-            print("Stopping container...")
+            self._logger.info("Stopping container...")
             container = self._client.containers.get(self._name)
             container.stop()
 

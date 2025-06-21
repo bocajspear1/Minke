@@ -1,10 +1,10 @@
 FROM debian:bullseye-slim AS basebuild
 RUN apt-get -qq update \
 && apt-get -q install --assume-yes debootstrap fakechroot fakeroot
-ARG MIRROR=https://archive.debian.org/debian-archive/debian
-ARG SUITE=wheezy
+ARG MIRROR=http://deb.debian.org/debian
+ARG SUITE=bullseye
 RUN mkdir /work
-RUN fakeroot fakechroot debootstrap --no-check-gpg --foreign --variant=minbase --arch=sparc "$SUITE" /work "$MIRROR" 
+RUN fakeroot fakechroot debootstrap --foreign --variant=minbase --arch=s390x "$SUITE" /work "$MIRROR"
 RUN tar -czf rootfs.tar.gz /work 
 
 FROM alpine:3.21 as qemubuild
@@ -26,10 +26,10 @@ RUN patch -u -b ./qemu-${QEMU_VER}/linux-user/syscall.c -i /opt/ptrace.patch
 WORKDIR /opt/qemu-${QEMU_VER}
 
 RUN mkdir /out
-RUN ./configure --target-list=sparc-linux-user --static --disable-system --enable-linux-user
+RUN ./configure --target-list=s390x-linux-user --static --disable-system --enable-linux-user
 RUN make -j 2 && make install
 
-FROM alpine:3.21
+FROM alpine:3.20
 
 RUN mkdir /out
 WORKDIR /opt
@@ -37,10 +37,10 @@ WORKDIR /opt
 RUN apk add -U sudo bash strace
 
 COPY --from=basebuild rootfs.tar.gz /opt/rootfs.tar.gz
-RUN tar -zxf rootfs.tar.gz && mv work sparc-root && rm rootfs.tar.gz
+RUN tar -zxf rootfs.tar.gz && mv work s390x-root && rm rootfs.tar.gz
 
-COPY --from=qemubuild /usr/local/bin/qemu-sparc /usr/local/bin/qemu-sparc
-RUN chmod +x /usr/local/bin/qemu-sparc
+COPY --from=qemubuild /usr/local/bin/qemu-s390x /usr/local/bin/qemu-s390x
+RUN chmod +x /usr/local/bin/qemu-s390x
 
 COPY start.sh /usr/bin/start.sh
 RUN chmod +x /usr/bin/start.sh

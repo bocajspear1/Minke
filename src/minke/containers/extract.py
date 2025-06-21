@@ -9,8 +9,8 @@ class ExtractContainer(BaseContainer):
 
     DOCKERFILE_DIR = "extract"
 
-    def __init__(self, name):
-        super().__init__('minke-extract', name)
+    def __init__(self, client, name):
+        super().__init__(client, 'minke-extract', name)
 
     def process(self, job_obj : MinkeJob):
         newfiles = os.path.join(job_obj.base_dir, "newfiles")

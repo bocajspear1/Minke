@@ -16,7 +16,7 @@ from typing_extensions import Annotated
 
 
 from minke.job import MinkeJob
-from minke.helper import filepath_clean, LOGGING_CONFIG
+from minke.helper import filepath_clean
 from minke.vars import *
 
 v1_router = APIRouter()

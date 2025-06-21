@@ -312,8 +312,8 @@ class WinelyzeContainer(BaseContainer):
 
     DOCKERFILE_DIR="winelyze"
 
-    def __init__(self, name, logger=None):
-        super().__init__('minke-winelyze', name, network=True, logger=logger)
+    def __init__(self, client, name, logger=None):
+        super().__init__(client, 'minke-winelyze', name, network=True, logger=logger)
         self._syscall_map = {}
         self._string_map = {}
 

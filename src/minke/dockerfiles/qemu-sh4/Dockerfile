@@ -7,7 +7,7 @@ RUN mkdir /work
 RUN fakeroot fakechroot debootstrap --keyring=/usr/share/keyrings/debian-ports-archive-keyring.gpg --foreign --variant=minbase --arch=sh4 "$SUITE" /work "$MIRROR"
 RUN tar -czf rootfs.tar.gz /work 
 
-FROM alpine:latest as qemubuild
+FROM alpine:3.21 as qemubuild
 
 RUN apk add -U wget musl-dev gcc g++ samurai make glib-dev glib-static libfdt pixman-dev zlib-dev zlib-static \
     strace python3 patch sudo bash flex bison linux-headers perl libc-dev
@@ -29,7 +29,7 @@ RUN mkdir /out
 RUN ./configure --target-list=sh4-linux-user --static --disable-system --enable-linux-user
 RUN make -j 2 && make install
 
-FROM alpine:latest
+FROM alpine:3.21
 
 RUN mkdir /out
 WORKDIR /opt

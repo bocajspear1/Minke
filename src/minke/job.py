@@ -7,6 +7,7 @@ import copy
 import re
 import base64
 import shutil
+import logging
 
 import magic
 
@@ -29,6 +30,7 @@ class MinkeJob():
             'complete': False,
             "written_files": []
         }
+        self._logger = logging.getLogger(f"job:{self._uuid}")
 
     def get_info(self):
         return copy.deepcopy(self._info)
@@ -107,7 +109,7 @@ class MinkeJob():
         filename = filepath_clean(filename)
 
         if filename not in self._info['files']:
-            print(f"File {filename} not found")
+            self._logger.error(f"File {filename} not found")
             return None
         return magic.from_file(os.path.join(self.files_dir, filename), mime=True)
     
@@ -115,7 +117,7 @@ class MinkeJob():
         filename = filepath_clean(filename)
 
         if filename not in self._info['files']:
-            print(f"File {filename} not found")
+            self._logger.error(f"File {filename} not found")
             return None
         return magic.from_file(os.path.join(self.files_dir, filename))
 
@@ -142,7 +144,7 @@ class MinkeJob():
 
     def get_log(self, log_name):
         log_name = filepath_clean(log_name)
-        
+
         log_path = os.path.join(self.logs_dir, log_name)
         if not os.path.exists(log_path):
             return None
