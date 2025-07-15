@@ -24,4 +24,4 @@ chmod 777 /home/${NAME}/${SAM}
 
 sleep 4
 echo "Starting sample"
-sudo -u ${NAME} /bin/bash -c "cd /home/${NAME}; strace -f -s 1024 -xx -v -tt -o /tmp/${OUT} qemu-i386 -L /opt/i386-root /home/${NAME}/${SAM}"
+sudo -u ${NAME} /bin/bash -c "cd /home/${NAME}; strace -f -s 1024 -xx -v -tt -o /tmp/${OUT} qemu-i386 -L /opt/i386-root /home/${NAME}/${SAM} ${ARGS}"

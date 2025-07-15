@@ -34,6 +34,12 @@ sudo --user ${NAME} /bin/bash -c "cp ${DIR}/* /home/${NAME}/.wine/drive_c/users/
 ls -la /home/${NAME}/.wine/drive_c/users/
 # chown -R ${NAME}:${NAME} /home/${NAME}/.wine/drive_c/
 
+sudo --user ${NAME} /bin/bash -c "DISPLAY=:0.0 wineboot"
+
+sudo --user ${NAME} /bin/bash -c "echo 'C:\\\\users\\\\${NAME}\\\\${SAM} ${ARGS}' > /home/${NAME}/.wine/drive_c/users/${NAME}/${NAME}.bat"
+
+cat /home/${NAME}/.wine/drive_c/users/${NAME}/${NAME}.bat
 sleep 4
 echo "Starting sample"
-sudo --user ${NAME} /bin/bash -c "cd /home/${NAME}/.wine/drive_c/users/${NAME}/; DISPLAY=:0.0 WINEDEBUG='+loaddll,+relay,+pid' wineconsole C:\\\\users\\\\${NAME}\\\\${SAM} 2> /tmp/${OUT}"
+echo sudo --user ${NAME} /bin/bash -c "cd /home/${NAME}/.wine/drive_c/users/${NAME}/; DISPLAY=:0.0 WINEDEBUG='+loaddll,+relay,+pid' wineconsole C:\\\\users\\\\${NAME}\\\\${NAME}.bat 2> /tmp/${OUT}"
+sudo --user ${NAME} /bin/bash -c "cd /home/${NAME}/.wine/drive_c/users/${NAME}/; DISPLAY=:0.0 WINEDEBUG='+loaddll,+relay,+pid' wineconsole C:\\\\users\\\\${NAME}\\\\${NAME}.bat 2> /tmp/${OUT}"

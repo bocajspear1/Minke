@@ -158,6 +158,7 @@ shell32.ShellExecuteA
 shell32.ShellExecuteExA
 shell32.ShellExecuteW
 shell32.ShellExecuteExW
+ucrtbase.puts
 urlmon.ObtainUserAgentString
 urlmon.URLDownloadToFileA
 urlmon.URLDownloadToFileW

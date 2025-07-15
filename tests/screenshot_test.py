@@ -1,6 +1,6 @@
 import os
 
-from minke.lib.screenshots import images_are_same
+from minke.helper import images_are_same
 
 
 

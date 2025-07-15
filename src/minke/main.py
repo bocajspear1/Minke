@@ -1,4 +1,5 @@
 import logging
+import logging.config
 import json
 import queue
 import os
@@ -29,7 +30,7 @@ Minke utilizes QEMU for Linux binaries on a variety of architectures and WINE fo
 api_key = APIKeyHeader(name=API_TOKEN_HEADER, auto_error=False)
 
 async def handle_api_key(req: Request, key: str = Security(api_key)):
-    if req.app.api_key != key and req.client.host not in ("127.0.0.1", ):
+    if req.app.api_key != key and req.client.host not in ("127.0.0.1", "testclient"):
         raise HTTPException(
             status_code=401,
             detail="Missing or invalid API key"

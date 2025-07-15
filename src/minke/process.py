@@ -93,43 +93,60 @@ class SampleThread (threading.Thread):
 
             cont_inst = None
 
+            found = False
+
             for container in container_list:
                 if not hasattr(container, "can_process"):
                     continue
+
                 container_name = f"{container.DOCKERFILE_DIR}-{job_obj.uuid}"
                 cont_inst = container(self._client, container_name, logger=self._logger)
                 can_process = cont_inst.can_process(exec_type, file_id, execname)
                 if not can_process:
                     continue
+                found = True
                 self._logger.info("Using %s container for sample %s", container.__name__, execname)
 
-                ip_addr = cont_inst.start(job_obj, env_vars={
+                env_vars = {
                     "SAMPLENAME": execname,
                     "USER": username,
                     "SCREENSHOT": screenshot,
                     "LOG": log_file
-                })
+                }
+
+                arguments = job_obj.get_config_value(ARGUMENTS_KEY)
+                if arguments is not None:
+                    env_vars['ARGS'] = arguments
+                else:
+                    env_vars['ARGS'] = ""
+
+                ip_addr = cont_inst.start(job_obj, env_vars=env_vars)
 
                 job_obj.set_info('ip_addr', ip_addr)
                 job_obj.save()
 
                 break
 
-
-            if cont_inst is not None:
-                main_logs, network_logs = cont_inst.wait_and_stop()
-                if main_logs.strip() != "":
-                    job_obj.write_log(f"{container_name}.log", main_logs)
-                if network_logs.strip() != "":
-                    job_obj.write_log(f"ports4u-container.log", network_logs)
-                cont_inst.process(job_obj)
-                cont_inst.process_network(job_obj)
-                self._logger.info("Analysis %s completed", job_obj.uuid)
-                job_obj.set_info('complete', True)
-                job_obj.set_info('end_time', time.time())
-                job_obj.save()
-                del cont_inst
+            if found:
+                if cont_inst is not None:
+                    main_logs, network_logs = cont_inst.wait_and_stop()
+                    if main_logs.strip() != "":
+                        job_obj.write_log(f"{container_name}.log", main_logs)
+                    if network_logs.strip() != "":
+                        job_obj.write_log(f"ports4u-container.log", network_logs)
+                    cont_inst.process(job_obj)
+                    cont_inst.process_network(job_obj)
+                    self._logger.info("Analysis %s completed", job_obj.uuid)
+                    job_obj.set_info('complete', True)
+                    job_obj.set_info('end_time', time.time())
+                    job_obj.save()
+                    del cont_inst
+                else:
+                    self._logger.error("No analysis container found")
             else:
-                self._logger.error("No analysis container found")
+                self._logger.info("Did not find analyzer for sample %s", execname)
+
+
+           
 
             time.sleep(.5)

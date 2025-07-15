@@ -102,6 +102,7 @@ def submit_file(
     request: Request,
     sample: Union[None, UploadFile] = None,
     samples: Union[None, List[UploadFile]] = None,
+    arguments: Annotated[str, Form()] = None,
     exec: Annotated[str, Form()] = None,
 ):
     if sample is None and samples is None:  
@@ -122,6 +123,11 @@ def submit_file(
     else:
         exec_name = filepath_clean(samples[0].filename)
         new_job.set_config_value(START_EXEC_KEY, exec_name)
+
+    print(arguments)
+    if arguments is not None:
+        print("Got args")
+        new_job.set_config_value(ARGUMENTS_KEY, arguments)
 
     for sample_item in samples:
         filename = filepath_clean(sample_item.filename)

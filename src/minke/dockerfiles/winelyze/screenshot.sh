@@ -6,5 +6,5 @@ PATH=$1
 while :; do
     timestamp=$(/usr/bin/date +%s);
     DISPLAY=:0.0 /usr/bin/xwd -root -silent -out /tmp/${PATH}/${timestamp}.xscr;
-    /usr/bin/sleep 2
+    /usr/bin/sleep 0.5
 done;

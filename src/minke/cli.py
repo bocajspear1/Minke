@@ -11,6 +11,8 @@ import subprocess
 from minke.helper import load_config, get_containers, get_docker, get_logging_config
 from minke.vars import *
 
+from docker.errors import BuildError
+
 
 class ContextObj():
 
@@ -94,12 +96,13 @@ def list_cmd(ctx):
                 print(tag)
 
 @containers_group.command('build')
+@click.option("--force", is_flag=True, help="Force build")
 @click.pass_obj
-def build_cmd(ctx):
+def build_cmd(ctx, force):
     containers = get_containers()
     docker_inst = get_docker(ctx.config)
 
-    username = ''.join(random.choice(string.ascii_lowercase) for i in range(6))
+    username = ctx.config['username']
 
     all_images = docker_inst.images.list()
     image_check = []
@@ -112,14 +115,14 @@ def build_cmd(ctx):
     for container in containers:
         
         image_name = f"minke-{container.DOCKERFILE_DIR}"
-        if image_name in image_check:
+        if image_name in image_check and force is not True:
             print(f"{Fore.GREEN}{image_name} already built{Style.RESET_ALL}")
             continue
         
         print(f"{Fore.BLUE}Building {container.DOCKERFILE_DIR} image...{Style.RESET_ALL}")
         dockerfile_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dockerfiles", container.DOCKERFILE_DIR)
         
-        from docker.errors import BuildError
+        
 
         try:
             image, build_logs = docker_inst.images.build(path=dockerfile_path, tag=image_name, buildargs={
@@ -149,6 +152,13 @@ def rebuild_cmd(ctx):
         print(f"{Fore.BLUE}Rebuilding {container.DOCKERFILE_DIR} image...{Style.RESET_ALL}")
         dockerfile_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dockerfiles", container.DOCKERFILE_DIR)
         
-        docker_inst.images.build(path=dockerfile_path, tag=image_name, buildargs={
-            "USERNAME": username
-        })
+        try:
+            docker_inst.images.build(path=dockerfile_path, tag=image_name, buildargs={
+                "USERNAME": username
+            })
+        except BuildError as e:
+            print("Build failed with:")
+            print(e)
+            for line in e.build_log:
+                print(line)
+            return 2

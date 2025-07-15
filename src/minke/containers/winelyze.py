@@ -62,10 +62,30 @@ def process_subcalls(string_map, lib_list, child_procs, extract_files, new_subca
                     extract_files.append(winpath)
             elif api_name in ("kernel32.createprocessw",):
                 app_path = args[0]
+                cmd_line = args[1][1:-1]
+                cmd_line = cmd_line.replace("\\\"", '"')
+                cmd_line = cmd_line.replace("\\\\", '\\')
+
                 if "\\" not in app_path:
-                    cmd_line = args[1][1:-1]
                     
-                    cmd_line = cmd_line.replace("\\\"", '"')
+                    app_path = shlex.split(cmd_line)[0]
+                else:
+                    app_path = app_path[1:-1]
+
+                app_path = app_path.split("\\")
+
+                print("Adding", app_path)
+
+                
+                # winpath = winpath.replace("\\\\", "\\")
+                child_procs.append((app_path[-1], cmd_line))
+            elif api_name in ("kernel32.createprocessasuserw",):
+                app_path = args[1]
+                cmd_line = args[2][1:-1]
+                    
+                cmd_line = cmd_line.replace("\\\"", '"')
+                cmd_line = cmd_line.replace("\\\\", '\\')
+                if "\\" not in app_path:
                     app_path = shlex.split(cmd_line)[0]
                 else:
                     app_path = app_path[1:-1]
@@ -74,7 +94,8 @@ def process_subcalls(string_map, lib_list, child_procs, extract_files, new_subca
 
                 
                 # winpath = winpath.replace("\\\\", "\\")
-                child_procs.append(app_path[-1])
+                print("asuser Adding", app_path)
+                child_procs.append((app_path[-1], cmd_line))
 
             # Remove double slashes
             for j in range(len(args)):
@@ -160,15 +181,19 @@ def process_subcalls(string_map, lib_list, child_procs, extract_files, new_subca
 
     return ret_calls
 
-def process_subprocess(process_name, lines):
+def process_subprocess(process_name, lines, cmdline=None):
     pid = "0"
     full_path = ""
     proc_search = process_name
     if "\\" not in process_name:
         proc_search = "\\" + process_name
 
+    if proc_search.endswith(".bat"):
+        proc_search = "\\cmd.exe"
+
+    # print(f"[process_subprocess] looking for {proc_search}")
+
     start = -1
-    end = -1
 
     proc_threads = {}
     loaded_libs = []
@@ -180,16 +205,16 @@ def process_subprocess(process_name, lines):
         line = lines[i]
         line_split = line.split(":", 2)
         if "loaddll:build_module Loaded" in line:
-            if proc_search in line:
+            if proc_search in line and full_path == "":
                 if start == -1:
                     start = i
                     pid = line_split[0]
                     full_path = line.split('"')[1]
                     full_path = full_path.replace("\\\\", "\\")
-                else:
-                    end = i
 
-        if start > -1 and end == -1 and line_split[0] == pid:
+                # print("[process_subprocess] fullpath", int(pid, 16), pid, full_path)
+
+        if start > -1 and line_split[0] == pid:
             # Parse out the TID and put in separate lists
             tid = int(line_split[1], 16)
             if tid not in proc_threads:
@@ -221,17 +246,25 @@ def process_subprocess(process_name, lines):
         string_map = {}
         thread_out_map[tid] = process_subcalls(string_map, loaded_libs, child_processes, extract_files, proc_threads[tid])
     
-    for child_process in child_processes:
-        child_out_list.append(process_subprocess(child_process, lines))
+    for child_process_tuple in child_processes:
+        child_process = child_process_tuple[0]
+        child_cmdline = child_process_tuple[1]
+        # print(f"[process_subprocess] Processing child", child_process)
+        child_out_list.append(process_subprocess(child_process, lines, child_cmdline))
 
-    return {
+    data = {
         "pid": int(pid, 16),
         "path": full_path,
+        "cmdline": cmdline,
         "libraries": loaded_libs,
         "threads": thread_out_map,
         "child_processes": child_out_list,
         "files_to_extract": extract_files
     }
+
+    # print(data['pid'], data['path'], len(child_out_list), data)
+
+    return data
             
 def process_wine_calls(wine_file):
     dump_file = open(wine_file)
@@ -241,11 +274,12 @@ def process_wine_calls(wine_file):
     lines = dump_data.split("\n")
     
     all_procs = []
-    main_tree_data = process_subprocess("start.exe", lines)
-    # start.exe and wineconsole.exe are the top of the tree
+    main_tree_data = process_subprocess("wineconsole.exe", lines)
+    # wineconsole.exe and cmd.exe, for the .bat file, are the top of the tree
     # Let's remove them
     wineconsole_proc = main_tree_data['child_processes'][0]
     sample_proc = wineconsole_proc['child_processes'][0]
+    # all_procs.append(sample_proc)
     all_procs.append(sample_proc)
 
     # Maybe some other process was started that was not in the main tree
@@ -321,7 +355,7 @@ class WinelyzeContainer(BaseContainer):
         data_path = os.path.join(my_dir, "..", "data", "interesting_syscalls.txt")
         self._syscall_map = load_syscall_map(data_path)
 
-    def does_process(self, mimetype, file_output):
+    def can_process(self, mimetype, file_id, filename):
         if mimetype in ('application/x-dosexec',) :
             return True
         else:
@@ -368,18 +402,18 @@ class WinelyzeContainer(BaseContainer):
             subprocess.check_output(["/usr/bin/convert", f"xwd:{job_obj.base_dir}/{screenshot_dir}/{item}", f"{job_obj.base_dir}/{screenshot_dir}/{new_name}"])
             os.remove(f"{job_obj.base_dir}/{screenshot_dir}/{item}")
 
-        self._logger.info("Removing extra screenshots...")
-        screenshot_pngs = os.listdir(f"{job_obj.base_dir}/{screenshot_dir}")
-        screenshot_pngs.sort()
-        i = 0
-        for i in range(len(screenshot_pngs)):
-            if i < len(screenshot_pngs)-1:
-                start_path = os.path.join(f"{job_obj.base_dir}/{screenshot_dir}", screenshot_pngs[i])
-                if not images_are_same(
-                    start_path, 
-                    os.path.join(f"{job_obj.base_dir}/{screenshot_dir}", screenshot_pngs[i+1])
-                ):
-                    job_obj.add_screenshot(start_path)
+        # self._logger.info("Removing extra screenshots...")
+        # screenshot_pngs = os.listdir(f"{job_obj.base_dir}/{screenshot_dir}")
+        # screenshot_pngs.sort()
+        # i = 0
+        # for i in range(len(screenshot_pngs)):
+        #     if i < len(screenshot_pngs)-1:
+        #         start_path = os.path.join(f"{job_obj.base_dir}/{screenshot_dir}", screenshot_pngs[i])
+        #         if not images_are_same(
+        #             start_path, 
+        #             os.path.join(f"{job_obj.base_dir}/{screenshot_dir}", screenshot_pngs[i+1])
+        #         ):
+        #             job_obj.add_screenshot(start_path)
 
 
         self._logger.info("Processing Wine dump...")

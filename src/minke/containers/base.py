@@ -88,7 +88,8 @@ class BaseContainer():
                 self._logger.info("Removing container %s", container_name)
                 container.remove()
         except docker.errors.NotFound:
-            self._logger.warning("Did not find container %s", container_name)
+            # self._logger.warning("Did not find container %s", container_name)
+            pass
         except docker.errors.APIError:
             self._logger.warning("Error removing container %s", container_name)
 
