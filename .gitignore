@@ -16,6 +16,9 @@ config.json
 *.winedump
 prof/
 logs/
+tests/*.json
+*.exe
+*.elf
 
 
 # Byte-compiled / optimized / DLL files

@@ -97,8 +97,10 @@ def list_cmd(ctx):
 
 @containers_group.command('build')
 @click.option("--force", is_flag=True, help="Force build")
+@click.option("--images", multiple=True, help="Images to build", default=None)
 @click.pass_obj
-def build_cmd(ctx, force):
+def build_cmd(ctx, force, images):
+    print(images)
     containers = get_containers()
     docker_inst = get_docker(ctx.config)
 
@@ -113,6 +115,9 @@ def build_cmd(ctx, force):
         
 
     for container in containers:
+
+        if images is not None and container.DOCKERFILE_DIR not in images:
+            continue
         
         image_name = f"minke-{container.DOCKERFILE_DIR}"
         if image_name in image_check and force is not True:

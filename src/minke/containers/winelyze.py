@@ -73,9 +73,6 @@ def process_subcalls(string_map, lib_list, child_procs, extract_files, new_subca
                     app_path = app_path[1:-1]
 
                 app_path = app_path.split("\\")
-
-                print("Adding", app_path)
-
                 
                 # winpath = winpath.replace("\\\\", "\\")
                 child_procs.append((app_path[-1], cmd_line))
@@ -94,7 +91,6 @@ def process_subcalls(string_map, lib_list, child_procs, extract_files, new_subca
 
                 
                 # winpath = winpath.replace("\\\\", "\\")
-                print("asuser Adding", app_path)
                 child_procs.append((app_path[-1], cmd_line))
 
             # Remove double slashes

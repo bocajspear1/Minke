@@ -124,7 +124,6 @@ def submit_file(
         exec_name = filepath_clean(samples[0].filename)
         new_job.set_config_value(START_EXEC_KEY, exec_name)
 
-    print(arguments)
     if arguments is not None:
         print("Got args")
         new_job.set_config_value(ARGUMENTS_KEY, arguments)
@@ -241,7 +240,7 @@ def get_job_pcap(job_uuid):
         raise HTTPException(404, detail="Job does not exist")
     else:
         job_obj.load()
-        pcap_path = os.path.join(job_obj.base_dir, "traffic.pcap")
+        pcap_path = os.path.join(job_obj.network_dir, "traffic.pcap")
         if not os.path.exists(pcap_path):
             raise HTTPException(404, detail="PCAP does not exist")
         else:

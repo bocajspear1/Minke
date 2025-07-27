@@ -1,0 +1,16 @@
+name: Build AARCH64
+on: [push, workflow_dispatch]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        id: setup_python
+        with:
+          python-version: '3.8'
+      - name: Build and test
+        run: ./scripts/ci_tests.sh

@@ -4,7 +4,7 @@ import time
 
 import pytest
 import minke.main
-from tests.helpers import any_thread_has_api_call, has_child_process
+from tests.helpers import any_thread_has_api_call, has_child_process, dump_json
 
 from fastapi.testclient import TestClient
 
@@ -29,7 +29,9 @@ def app():
 
 @pytest.fixture()
 def client(app):
-    return TestClient(app)
+    client = TestClient(app)
+    client.submission_count = 0
+    return client
 
 # @pytest.fixture()
 # def runner(app):
@@ -86,7 +88,6 @@ def test_api_job_networking_invalid(client):
     assert response.status_code == 404
     assert response.json()['detail'] == "Job does not exist"
 
-# @pytest.mark.skip()
 def test_api_submit_1(client):
     file_dir = os.path.abspath(os.path.dirname(__file__))
     
@@ -94,12 +95,13 @@ def test_api_submit_1(client):
     assert os.path.exists(sample_path)
 
     postdata = {}
-    postdata['sample'] = (open(sample_path, "rb"), 'test.x86-64.exe')
-    response = client.post("/api/v1/samples/submit", data=postdata,
-        content_type='multipart/form-data'
-    )
+    files = {"sample": open(sample_path, "rb")}
+    # postdata['sample'] = (open(sample_path, "rb"), 'test.x86-64.exe')
+    response = client.post("/api/v1/samples/submit", data=postdata, files=files)
     assert response.json()['ok'] == True
     assert response.json()['result']['job_id'] is not None
+
+    client.submission_count += 1
 
     job_uuid = response.json()['result']['job_id']
 
@@ -142,7 +144,88 @@ def test_api_submit_1(client):
     assert "192.168.122.198" in response.json()['result']['ip_list']
     assert "tcp|192.168.122.198|8080" in response.json()['result']['connections']
 
+    response = client.get(f"/api/v1/jobs/{job_uuid}/pcap")
+    assert response.status_code == 200
+
     response = client.get(f"/api/v1/jobs/{job_uuid}/logs")
     assert response.json()['ok'] == True
     assert "ports4u-container.log" in response.json()['result']['logs']
 
+
+def test_api_submit_linux(client):
+    file_dir = os.path.abspath(os.path.dirname(__file__))
+
+    counter = 1
+
+    for file_name in ("test.arm.elf", "test.powerpc.elf", "test.mipsel.elf"):
+        
+        sample_path = os.path.join(file_dir, "files", file_name)
+        assert os.path.exists(sample_path)
+
+        postdata = {}
+        files = {"sample": open(sample_path, "rb")}
+        
+        response = client.post("/api/v1/samples/submit", data=postdata, files=files)
+        assert response.json()['ok'] == True
+        assert response.json()['result']['job_id'] is not None
+
+        client.submission_count += 1
+
+        job_uuid = response.json()['result']['job_id']
+
+        response = client.get("/api/v1/jobs/count")
+        assert response.json()['ok'] == True
+        assert response.json()['result']['count'] == client.submission_count
+
+        response = client.get(f"/api/v1/jobs/{job_uuid}/info")
+        assert response.json()['ok'] == True
+        assert response.json()['result']['info']['complete'] == False
+        assert response.json()['result']['config'] is not None
+        
+        time.sleep(2.5 * 60)
+
+        response = client.get(f"/api/v1/jobs/{job_uuid}/info")
+        assert response.json()['ok'] == True
+        assert response.json()['result']['info']['complete'] == True
+        assert response.json()['result']['config'] is not None
+
+        response = client.get(f"/api/v1/jobs/{job_uuid}/networking")
+        assert response.json()['ok'] == True
+
+        response = client.get(f"/api/v1/jobs/{job_uuid}/logs")
+        assert response.json()['ok'] == True
+        assert len(response.json()['result']['logs']) > 0
+
+        response = client.get(f"/api/v1/jobs/{job_uuid}/syscalls")
+        assert response.json()['ok'] == True
+        processes = response.json()['result']['processes']
+
+        dump_json(processes, "mipsle-processes.json")
+
+        assert any_thread_has_api_call(processes[0], "openat", subcall=False, args=[
+            "AT_FDCWD",
+            "\"/tmp/nothinghere\"",
+            "*",
+            "*"
+        ], name_key="syscall")
+        assert any_thread_has_api_call(processes[0], "clone", subcall=False, name_key="syscall")
+        assert any_thread_has_api_call(processes[0], "socket", subcall=False, args=[
+            "AF_INET",
+            "SOCK_STREAM",
+            "IPPROTO_IP"
+        ], name_key="syscall")
+        assert any_thread_has_api_call(processes[0], "connect", subcall=False, name_key="syscall")
+        assert has_child_process(processes[0], "touch")
+        # assert has_child_process(processes[0], "notepad.exe")
+
+        response = client.get(f"/api/v1/jobs/{job_uuid}/networking")
+        assert response.json()['ok'] == True
+        assert "192.168.122.95" in response.json()['result']['ip_list']
+        assert "tcp|192.168.122.95|8080" in response.json()['result']['connections']
+
+        response = client.get(f"/api/v1/jobs/{job_uuid}/logs")
+        assert response.json()['ok'] == True
+        assert "ports4u-container.log" in response.json()['result']['logs']
+
+        response = client.get(f"/api/v1/jobs/{job_uuid}/pcap")
+        assert response.status_code == 200, f"Got response '{response.text}'"
