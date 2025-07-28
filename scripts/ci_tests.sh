@@ -15,4 +15,14 @@ minke containers build --images winelyze --images qemu-arm --images qemu-mipsel 
 
 ./scripts/unarchive_test_files.sh
 
+cat > ./config.json <<EOL
+{
+    "access_key": "atestkey",
+    "max_concurrent": 2,
+    "username": "testuser",
+    "log_dir": "./logs",
+    "log_level": "debug"
+}
+EOL
+
 pytest -s 
