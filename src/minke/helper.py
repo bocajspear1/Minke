@@ -83,6 +83,11 @@ def get_logging_config(config):
                 "level": "INFO",
                 "propagate": False,
             },
+            "PIL.PngImagePlugin": { # Noisy, so we suppress
+                "handlers": ["console"],
+                "level": "INFO",
+                "propagate": False,
+            },
         },
         "root": {
             "handlers": ["console", "file"],

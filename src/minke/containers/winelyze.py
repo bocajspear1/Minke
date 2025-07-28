@@ -352,7 +352,7 @@ class WinelyzeContainer(BaseContainer):
         self._syscall_map = load_syscall_map(data_path)
 
     def can_process(self, mimetype, file_id, filename):
-        if mimetype in ('application/x-dosexec',) :
+        if mimetype in ('application/x-dosexec', 'application/vnd.microsoft.portable-executable') :
             return True
         else:
             return False

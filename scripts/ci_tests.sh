@@ -36,6 +36,11 @@ sudo systemctl restart docker
  
 minke containers build --images winelyze --images qemu-arm --images qemu-mipsel --images qemu-powerpc
 
+git clone https://github.com/bocajspear1/ports4u.git
+cd ports4u
+make build
+cd ..
+
 ./scripts/unarchive_test_files.sh
 
 mkdir ./logs
