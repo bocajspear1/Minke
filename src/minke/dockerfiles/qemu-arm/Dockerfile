@@ -4,7 +4,7 @@ RUN apt-get -qq update \
 ARG MIRROR=http://deb.debian.org/debian
 ARG SUITE=bullseye
 RUN mkdir /work
-RUN fakeroot fakechroot debootstrap --foreign --variant=minbase --arch=armel "$SUITE" /work "$MIRROR"
+RUN fakeroot fakechroot debootstrap --foreign --variant=minbase --arch=armhf "$SUITE" /work "$MIRROR"
 RUN tar -czf rootfs.tar.gz /work 
 
 FROM alpine:3.21 as qemubuild
