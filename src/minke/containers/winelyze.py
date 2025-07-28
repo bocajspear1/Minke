@@ -395,7 +395,11 @@ class WinelyzeContainer(BaseContainer):
         screenshot_raws = os.listdir(f"{job_obj.base_dir}/{screenshot_dir}")
         for item in screenshot_raws:
             new_name = item.replace("xscr", "png")
-            subprocess.check_output(["/usr/bin/convert", f"xwd:{job_obj.base_dir}/{screenshot_dir}/{item}", f"{job_obj.base_dir}/{screenshot_dir}/{new_name}"])
+            try:
+                subprocess.check_output(["/usr/bin/convert", f"xwd:{job_obj.base_dir}/{screenshot_dir}/{item}", f"{job_obj.base_dir}/{screenshot_dir}/{new_name}"])
+            except subprocess.CalledProcessError as e:
+                self._logger.error("Error converting screenshot: %s", e.output)
+                raise
             os.remove(f"{job_obj.base_dir}/{screenshot_dir}/{item}")
 
         # self._logger.info("Removing extra screenshots...")
