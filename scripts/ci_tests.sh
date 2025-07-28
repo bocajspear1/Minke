@@ -2,6 +2,9 @@
 
 set -e
 
+sudo apt-get update
+sudo apt-get install make imagemagick
+
 python3 -m venv ./venv
 source ./venv/bin/activate
 
@@ -42,7 +45,5 @@ make build
 cd ..
 
 ./scripts/unarchive_test_files.sh
-
-mkdir ./logs
 
 pytest -s 

@@ -42,6 +42,12 @@ def web_cmd(ctx, port, addr, debug):
     if debug is True:
         ctx.config['log_level'] = 'debug'
 
+    if not os.path.exists("./samples"):
+        os.mkdir("./samples")
+
+    if not os.path.exists("./logs"):
+        os.mkdir("./logs")
+
     logging_config = get_logging_config(ctx.config)
     try:
         import uvicorn
