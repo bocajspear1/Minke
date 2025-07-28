@@ -10,10 +10,6 @@ pip3 install pdm
 pdm install
 
 pdm install -G test
- 
-minke containers build --images winelyze --images qemu-arm --images qemu-mipsel --images qemu-powerpc
-
-./scripts/unarchive_test_files.sh
 
 cat > ./config.json <<EOL
 {
@@ -24,5 +20,9 @@ cat > ./config.json <<EOL
     "log_level": "debug"
 }
 EOL
+ 
+minke containers build --images winelyze --images qemu-arm --images qemu-mipsel --images qemu-powerpc
+
+./scripts/unarchive_test_files.sh
 
 pytest -s 
