@@ -34,7 +34,7 @@ sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 
 sudo systemctl restart docker
  
-minke containers build --images winelyze --images qemu-arm --images qemu-mipsel --images qemu-powerpc
+minke containers build --images winelyze --images qemu-arm --images qemu-mipsel --images qemu-powerpc --images netmon
 
 git clone https://github.com/bocajspear1/ports4u.git
 cd ports4u
