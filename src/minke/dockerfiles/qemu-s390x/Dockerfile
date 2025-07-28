@@ -1,7 +1,7 @@
 FROM debian:bullseye-slim AS basebuild
 RUN apt-get -qq update \
 && apt-get -q install --assume-yes debootstrap fakechroot fakeroot
-ARG MIRROR=http://deb.debian.org/debian
+ARG MIRROR=https://archive.debian.org/debian-archive/debian
 ARG SUITE=bullseye
 RUN mkdir /work
 RUN fakeroot fakechroot debootstrap --foreign --variant=minbase --arch=s390x "$SUITE" /work "$MIRROR"

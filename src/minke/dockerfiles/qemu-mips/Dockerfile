@@ -1,8 +1,8 @@
 FROM debian:bullseye-slim AS basebuild
 RUN apt-get -qq update \
 && apt-get -q install --assume-yes debootstrap fakechroot fakeroot
-ARG MIRROR=http://deb.debian.org/debian
-ARG SUITE=bullseye
+ARG MIRROR=https://archive.debian.org/debian-archive/debian
+ARG SUITE=wheezy
 RUN mkdir /work
 RUN fakeroot fakechroot debootstrap --foreign --variant=minbase --arch=mips "$SUITE" /work "$MIRROR"
 RUN tar -czf rootfs.tar.gz /work 
