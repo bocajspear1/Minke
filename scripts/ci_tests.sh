@@ -20,6 +20,20 @@ cat > ./config.json <<EOL
     "log_level": "debug"
 }
 EOL
+
+cat > ./docker.json <<EOL
+{
+  "userns-remap": "default",
+  "iptables": false
+}
+EOL
+
+sudo cp ./docker.json /etc/docker/daemon.json
+
+ip addr
+sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+
+sudo systemctl restart docker
  
 minke containers build --images winelyze --images qemu-arm --images qemu-mipsel --images qemu-powerpc
 
