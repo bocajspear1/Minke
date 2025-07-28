@@ -30,7 +30,6 @@ EOL
 
 sudo cp ./docker.json /etc/docker/daemon.json
 
-ip addr
 sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 
 sudo systemctl restart docker
@@ -38,5 +37,7 @@ sudo systemctl restart docker
 minke containers build --images winelyze --images qemu-arm --images qemu-mipsel --images qemu-powerpc
 
 ./scripts/unarchive_test_files.sh
+
+mkdir ./logs
 
 pytest -s 
