@@ -46,4 +46,7 @@ cd ..
 
 ./scripts/unarchive_test_files.sh
 
+mkdir ./logs
+mkdir ./samples
+
 pytest -s 
