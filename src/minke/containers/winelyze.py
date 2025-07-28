@@ -398,7 +398,7 @@ class WinelyzeContainer(BaseContainer):
             try:
                 subprocess.check_output(["/usr/bin/convert", f"xwd:{job_obj.base_dir}/{screenshot_dir}/{item}", f"{job_obj.base_dir}/{screenshot_dir}/{new_name}"])
             except subprocess.CalledProcessError as e:
-                self._logger.error("Error converting screenshot: %s", e.output)
+                self._logger.error("Error converting screenshot: stdout: %s, stderr: %s", e.stdout, e.stderr)
                 raise
             os.remove(f"{job_obj.base_dir}/{screenshot_dir}/{item}")
 

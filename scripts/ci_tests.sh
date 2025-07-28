@@ -3,7 +3,7 @@
 set -e
 
 sudo apt-get update
-sudo apt-get install make imagemagick
+sudo apt-get install make graphicsmagick-imagemagick-compat 
 
 python3 -m venv ./venv
 source ./venv/bin/activate
