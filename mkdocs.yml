@@ -1,0 +1,13 @@
+site_name: Minke
+theme: readthedocs
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+nav:
+  - 'index.md'
+  - 'installation.md'
+  - 'limitations.md'
+  - 'configuration.md'
+  - 'usage.md'
+  - 'testing.md'
