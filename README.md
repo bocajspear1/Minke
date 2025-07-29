@@ -3,47 +3,17 @@
 ![alt text](files/minke.png)
 
 
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/bocajspear1/Minke/run_tests.yml)
+![GitHub License](https://img.shields.io/github/license/bocajspear1/Minke)
+![GitHub top language](https://img.shields.io/github/languages/top/bocajspear1/Minke)
+
 Minke is a platform for performing malware analysis in Docker containers, even for Windows.
 
 
 # Installation
 
-## Install External Dependencies
+See instructions [here](https://minkeanalyze.readthedocs.io/en/latest/installation/)
 
-Install Docker according to the latest instructions: https://docs.docker.com/engine/install/ubuntu/
+# Usage
 
-Install other dependencies:
-```
-sudo apt-get install -y openvswitch-switch imagemagick
-```
-
-Download the project [Ports4U](https://github.com/bocajspear1/ports4u). Build the container with:
-```
-make build
-```
-
-## Install Minke
-
-Download the project. Then create virtual environment and install Python dependencies:
-```
-python3 -m venv ./venv
-source ./venv/bin/activate
-pip3 install -r requirements.txt
-pip3 install -r requirements-dev.txt # Only if developing or testing
-```
-
-Add the sudoers file so Minke can before network functionality. The file is located in `files/minke-sudoers`. Add this to your `/etc/sudoers.d/` directory.
-
-Then build the containers:
-```
-python3 minke/build.py
-```
-
-If no errors are shown, you're all set!
-
-# Running
-
-Use the start script:
-```
-./start_server.sh
-```
+Minke is primarily used through an API. You can see its live Swagger documentation at `http://<MINKE_HOST>:8000/docs`.
